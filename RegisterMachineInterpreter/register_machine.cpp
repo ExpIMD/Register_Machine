@@ -1,8 +1,8 @@
 #include "register_machine.h"
 #include <fstream>
 #include <iostream>
-#include <stdexcept>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 
 void register_machine::parse_input_arguments(const std::string& line) {
@@ -17,13 +17,13 @@ void register_machine::parse_input_arguments(const std::string& line) {
 void register_machine::parse_output_arguments(const std::string& line) {
 	std::string variable;
 	std::istringstream iss(line);
-	while (iss >> variable) 
+	while (iss >> variable)
 		this->_output_registers.push_back(variable);
 }
 
 void register_machine::print_commands() const {
 	for (const auto& x : this->_commands)
-		std::cout << x.first << ":" << x.second << std::endl;
+		std::cout << x << std::endl;
 }
 void register_machine::print_registers() const {
 	for (const auto& x : this->_registers)
@@ -38,12 +38,12 @@ void register_machine::run() {
 
 void register_machine::print_output_registers() const {
 	for (const auto& x : this->_output_registers)
-		std::cout << x << " = " << this->_registers.at(x);
+		std::cout << x << " = " << this->_registers.at(x); // TODO: at - лишнее копирование...
 }
 
 void register_machine::execute_commands() {
 	while (true) {
-		const auto& [mark, command] = this->_commands[this->_carriage];
+		const auto& command = this->_commands[this->_carriage];
 
 		if (command.find(ASSIGNMENT) != std::string::npos) {
 			assigment_command(command);
@@ -58,11 +58,6 @@ void register_machine::execute_commands() {
 			stop_command();
 			break;
 		}
-
-
-		
-
-
 	}
 
 
@@ -104,7 +99,7 @@ void register_machine::condition_command(const std::string& command) {
 	if (this->_registers[left_part] == 0) this->_carriage = std::stoi(true_L);
 	else this->_carriage = std::stoi(false_L);
 }
-	
+
 
 void register_machine::stop_command() {
 	this->_carriage = 0;
@@ -166,6 +161,7 @@ void register_machine::load_commands() {
 
 	if (std::getline(ifs, line)) parse_input_arguments(line); // Первая строка - входные аргументы
 
+	size_t expected_mark{ 0 };
 	while (std::getline(ifs, line)) {
 		auto temp = line.find(SEPARATOR);
 		if (temp == std::string::npos) { // Дошли до выходных аргументов
@@ -174,7 +170,11 @@ void register_machine::load_commands() {
 
 		std::string mark = line.substr(0, temp);
 		std::string instruction = line.substr(temp + 1);
-		this->_commands.emplace_back(mark, instruction); // TODO: добавить проверку на корректность марки инструкции
+
+		if (std::stoi(mark) != expected_mark) throw std::invalid_argument(""); // Проверка, что метки пронумерованы последовательно, без рывков, т.е. 0 -> 1 -> 2 -> ...
+
+		this->_commands.emplace_back(instruction); // TODO: добавить проверку на корректность марки инструкции
+		++expected_mark;
 	}
 	// Последняя строка - выходные аргументы
 	std::getline(ifs, line);

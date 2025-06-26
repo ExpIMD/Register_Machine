@@ -1,8 +1,10 @@
 #include "register_machine.h"
-#include <string>
 #include <iostream>
+#include <string>
 
 int main() {
+	setlocale(LC_ALL, "Russian");
+
 	std::string filename{ "RM.txt" };
 	register_machine RM(filename);
 

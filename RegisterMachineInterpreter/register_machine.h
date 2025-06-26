@@ -1,10 +1,10 @@
-
 #ifndef __REGISTER_MACHINE_
 #define __REGISTER_MACHINE_
 
-#include <unordered_map>
-#include <string>
 #include <optional>
+#include <string>
+#include <unordered_map>
+
 
 #define SEPARATOR ":"
 #define ASSIGNMENT "<-"
@@ -21,8 +21,8 @@ class register_machine {
 private:
 	size_t _carriage; // Каретка
 	std::unordered_map<std::string, int> _registers; // Переменные
-	std::vector<std::pair<std::string, std::string>> _commands; // Список комманд
-	std::vector<std::string> _output_registers;
+	std::vector<std::string> _commands; // Список комманд
+	std::vector<std::string> _output_registers; // Выходные регистры
 	std::string _filename; // Имя файла
 public:
 	register_machine(const std::string& filename) : _filename(filename), _carriage(0), _registers() {}
@@ -44,7 +44,6 @@ private:
 	void condition_command(const std::string& command); // Выполнение условной инструкции
 	void stop_command(); // Выполнение остановочной инструкции
 	void trim(std::string& line) const; // Удаление лишних пробелов слева и справа от строки
-	
 };
 
 
