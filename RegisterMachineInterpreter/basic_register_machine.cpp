@@ -84,7 +84,7 @@ bool basic_register_machine::is_valid_condition_command(const std::string& comma
 
 // Проверка корректности инструкции присваивания
 bool basic_register_machine::is_valid_assignment_command(const std::string& command) const {
-	std::string pattern{ R"(^\s*(\w+)\s*<-\s*(?:(\d+)|(\w+)\s*([+\-])\s*1|1\s*([+\-])\s*(\w+))\s*$)" };  // TODO: не используются макросы
+	std::string pattern{ R"(^\s*(\w+)\s*<-\s*(?:(\d+)|\1\s*([+\-])\s*1|1\s*([+\-])\s*\1)\s*$)" };
 	std::regex regex{ pattern };
 	return std::regex_match(command, regex);
 }

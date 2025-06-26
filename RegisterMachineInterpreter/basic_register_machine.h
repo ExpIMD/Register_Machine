@@ -1,7 +1,6 @@
-#ifndef __REGISTER_MACHINE_
-#define __REGISTER_MACHINE_
+#ifndef __BASIC_REGISTER_MACHINE_
+#define __BASIC_REGISTER_MACHINE_
 
-#include <optional>
 #include <string>
 #include <unordered_map>
 
@@ -97,7 +96,4 @@ private:
 	void trim(std::string& line) const;
 };
 
-
-
-
-#endif // !__REGISTER_MACHINE_
+#endif

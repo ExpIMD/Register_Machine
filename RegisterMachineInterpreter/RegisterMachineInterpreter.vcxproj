@@ -130,6 +130,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="basic_register_machine.h" />
+    <ClInclude Include="extended_register_machine.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="program.cpp" />
