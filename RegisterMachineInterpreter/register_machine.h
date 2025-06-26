@@ -11,6 +11,11 @@
 #define PLUS "+"
 #define MINUS "-"
 #define STOP "stop"
+#define IF "if"
+#define ELSE "else"
+#define THEN "then"
+#define GOTO "goto"
+#define EQUAL "=="
 
 class register_machine {
 private:
@@ -26,15 +31,17 @@ public:
 
 	void run(); // Выполнение кода
 
-	void execute_command(); // Выполняет текущую комманду
+	void execute_commands(); // Выполняет текущую комманду
 
 	void print_commands() const;
 	void print_registers() const;
 private:
-	void parsing_input_arguments(const std::string& line);
+	void parse_input_arguments(const std::string& line);
 	void assigment_command(const std::string& command);
-	void trim(std::string& line) const;
+	void condition_command(const std::string& command);
 	void stop_command();
+	void trim(std::string& line) const;
+	
 };
 
 
