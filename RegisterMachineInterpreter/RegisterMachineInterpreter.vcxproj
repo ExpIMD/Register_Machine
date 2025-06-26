@@ -129,12 +129,11 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="basic_register_machine.h" />
-    <ClInclude Include="extended_register_machine.h" />
+    <ClInclude Include="register_machine.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="program.cpp" />
-    <ClCompile Include="basic_register_machine.cpp" />
+    <ClCompile Include="register_machine.cpp" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="RM.txt" />

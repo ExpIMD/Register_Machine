@@ -3,11 +3,15 @@
 
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 using namespace std::string_literals;
 
+// Макросы ключевых слов РМ
+
 #define SEPARATOR ":"s
 #define ASSIGNMENT "<-"s
+#define MOVE "<<-"s
 #define PLUS "+"s
 #define MINUS "-"s
 #define STOP "stop"s
@@ -17,17 +21,21 @@ using namespace std::string_literals;
 #define GOTO "goto"s
 #define EQUAL "=="s
 
-
+// Класс базовой РМ
 class basic_register_machine {
-private:
+protected:
 	// Каретка, хранящая номер текущей инструкции
 	size_t _carriage;
+
 	// Словарь регистров (переменных)
 	std::unordered_map<std::string, int> _registers;
+
 	// Вектор команд
 	std::vector<std::string> _commands;
+
 	// Вектор выходных регистров
 	std::vector<std::string> _output_registers;
+
 	// Имя обрабатываемого файла
 	std::string _filename;
 public:
@@ -59,41 +67,67 @@ public:
 	}
 
 	// Деструктор
-	~basic_register_machine() = default;
+	virtual ~basic_register_machine() = default;
 
 	// Запуск РМ
-	void run();
+	virtual void run();
 
 	// Загрузка всех команд
-	void load_all_commands();
+	virtual void load_all_commands();
 	// Выполнение всех команд
-	void execute_all_commands();
+	virtual void execute_all_commands();
 
 	// Печать выходных регистров
 	void print_output_registers() const;
-private:
+protected:
 
 	// Проверка корректности формата условной инструкции
-	bool is_valid_condition_command(const std::string& command) const;
+	virtual bool is_valid_condition_command(const std::string& command) const;
 	// Проверка корректности формата инструкции присваивания
-	bool is_valid_assignment_command(const std::string& command) const;
+	virtual bool is_valid_assignment_command(const std::string& command) const;
 	// Проверка корректности формата остановочной команды
-	bool is_valid_stop_command(const std::string& command) const;
+	virtual bool is_valid_stop_command(const std::string& command) const;
+
+	// Выполнение инструкции присваивания
+	virtual void execute_assigment_command(const std::string& command);
+	// Выполнение условной инструкции
+	virtual void execute_condition_command(const std::string& command);
+	// Выполнение остановочной инструкции
+	virtual void execute_stop_command(const std::string& command);
 
 	// Парсинг аргументов
 	void parse_input_arguments(const std::string& line);
 	// Парсинг результатов (выходных регистров)
 	void parse_output_arguments(const std::string& line);
 
-	// Выполнение инструкции присваивания
-	void execute_assigment_command(const std::string& command);
-	// Выполнение условной инструкции
-	void execute_condition_command(const std::string& command);
-	// Выполнение остановочной инструкции
-	void execute_stop_command(const std::string& command);
-
 	// Удаление лишних пробелов слева и справа от строки
 	void trim(std::string& line) const;
+
+	bool is_variable(const std::string& line) const;
+};
+
+// Класс расширенной РМ
+class extended_register_machine : public basic_register_machine {
+
+
+
+public:
+	extended_register_machine(const std::string& filename) : basic_register_machine(filename) {}
+	extended_register_machine(std::string&& filename) : basic_register_machine(filename) {}
+	~extended_register_machine() = default;
+
+	void execute_all_commands() override;
+
+protected:
+	void execute_assigment_command(const std::string& command) override;
+	void execute_condition_command(const std::string& command) override;
+	void execute_move_command(const std::string& command);
+	// Проверка корректности формата перемещающей команды
+	bool is_valid_move_command(const std::string& command) const;
+
+	bool is_valid_condition_command(const std::string& command) const override;
+
+	bool is_valid_assignment_command(const std::string& command) const override;
 };
 
 #endif
