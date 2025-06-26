@@ -75,7 +75,10 @@ void extended_register_machine::execute_all_commands() {
 	while (true) {
 		const auto& command = this->_commands[this->_carriage];
 
-		// TODO: оператор композиции не реализован
+		// TODO: оператор композиции не реализован call
+		// TODO: оператор сброса регистров reset
+		// TODO: оператор деления и умножения
+		// TODO: swap
 
 		if (command.find(MOVE) != std::string::npos) {
 			this->execute_move_command(command);
@@ -94,11 +97,33 @@ void extended_register_machine::execute_all_commands() {
 			continue;
 		}
 
+		if (command.find(GOTO) != std::string::npos) {
+			this->execute_goto_command(command);
+			continue;
+		}
+
 		if (command.find(STOP) != std::string::npos) { // РМ завершает свою работу только по достижению остановочной инструкции
 			this->execute_stop_command(command);
 			break;
 		}
 	}
+}
+
+void extended_register_machine::execute_goto_command(const std::string& command) {
+	if (!is_valid_goto_command(command))
+		throw std::runtime_error("The goto statement has an invalid format");
+
+	auto goto_position = command.find(GOTO);
+	auto L = command.substr(goto_position + GOTO.length());
+
+	this->trim(L);
+	this->_carriage = std::stoi(L);
+}
+
+bool extended_register_machine::is_valid_goto_command(const std::string& command) const {
+	std::string pattern{ R"(^\s*goto\s+(\w+)\s*$)" }; // TODO: не используются макросы
+	std::regex regex{ pattern };
+	return std::regex_match(command, regex);
 }
 
 void extended_register_machine::execute_move_command(const std::string& command) {
@@ -157,7 +182,7 @@ bool basic_register_machine::is_valid_assignment_command(const std::string& comm
 
 // Проверка корректности условной инструкции
 bool extended_register_machine::is_valid_assignment_command(const std::string& command) const {
-	std::string pattern{ R"(^\s*(\w+)\s*<-\s*(?:(\d+)|(\w+)\s*([+\-])\s*1|1\s*([+\-])\s*(\w+)|(\w+))\s*$)" }; // TODO: не используются макросы
+	std::string pattern{ R"(^\s*(\w+)\s*<-\s*(?:(\d+)|(\w+)\s*([+\-])\s*(\d+|\w+)|(\d+|\w+)\s*([+\-])\s*(\w+)|(\w+))\s*$)" }; // TODO: не используются макросы
 	std::regex regex{ pattern };
 	return std::regex_match(command, regex);
 }
@@ -209,8 +234,7 @@ void basic_register_machine::execute_assigment_command(const std::string& comman
 		trim(left_operand);
 		trim(right_operand);
 
-		if (left_operand == "1") this->_registers[left_part] = 1 + this->_registers[right_operand];
-		else if (right_operand == "1") this->_registers[left_part] = this->_registers[left_operand] + 1;
+		this->_registers[left_part] = this->get_value(left_operand) + this->get_value(right_operand);
 
 		return;
 	}
@@ -224,16 +248,21 @@ void basic_register_machine::execute_assigment_command(const std::string& comman
 		trim(left_operand);
 		trim(right_operand);
 
-		if (left_operand == "1") this->_registers[left_part] = std::max(0, 1 - this->_registers[right_operand]);
-		else if (right_operand == "1") this->_registers[left_part] = std::max(0, this->_registers[left_operand] - 1);
+		this->_registers[left_part] = std::max(0, this->get_value(left_operand) + this->get_value(right_operand));
 
 		return;
 	}
 
 	// Обработка инструкции вида L: x <- a, где a - положительное целое число
-	this->_registers[left_part] = std::stoi(right_part);
+	this->_registers[left_part] = this->get_value(right_part);
 
 	return;
+}
+
+int basic_register_machine::get_value(const std::string& line) const {
+	if (std::all_of(line.begin(), line.end(), ::isdigit)) return std::stoi(line);
+	if (this->is_variable(line)) return this->_registers.at(line);
+	throw std::runtime_error("");
 }
 
 void extended_register_machine::execute_assigment_command(const std::string& command) {
@@ -256,8 +285,7 @@ void extended_register_machine::execute_assigment_command(const std::string& com
 		trim(left_operand);
 		trim(right_operand);
 
-		if (left_operand == "1") this->_registers[left_part] = 1 + this->_registers[right_operand];
-		else if (right_operand == "1") this->_registers[left_part] = this->_registers[left_operand] + 1;
+		this->_registers[left_part] = this->get_value(left_operand) + this->get_value(right_operand);
 
 		return;
 	}
@@ -277,8 +305,7 @@ void extended_register_machine::execute_assigment_command(const std::string& com
 		return;
 	}
 
-	if (is_variable(right_part)) this->_registers[left_part] = this->_registers[right_part]; // Обработка инструкции вида L: x <- y, где y - регистр
-	else this->_registers[left_part] = std::stoi(right_part); // Обработка инструкции вида L: x <- a, где a - положительное целое число
+	this->_registers[left_part] = this->get_value(right_part);
 
 	return;
 }
@@ -379,4 +406,26 @@ bool basic_register_machine::is_variable(const std::string& line) const {
 		if (!std::isalnum(line[i])) return false;
 
 	return true;
+}
+
+// Оператор присваивания
+basic_register_machine& basic_register_machine::operator=(const basic_register_machine& other) noexcept {
+	if (this != &other) {
+		this->_carriage = other._carriage;
+		this->_registers = other._registers;
+		this->_commands = other._commands;
+		this->_output_registers = other._output_registers;
+		this->_filename = other._filename;
+	}
+
+	return *this;
+}
+// Оператор move-присваивания
+basic_register_machine& basic_register_machine::operator=(basic_register_machine&& other) noexcept {
+	this->_carriage = std::move(other._carriage);
+	this->_registers = std::move(other._registers);
+	this->_commands = std::move(other._commands);
+	this->_output_registers = std::move(other._output_registers);
+	this->_filename = std::move(other._filename);
+	return *this;
 }

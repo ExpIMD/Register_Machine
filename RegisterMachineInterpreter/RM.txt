@@ -1,6 +1,6 @@
 x y
-0: x <- y
-1: if x == y then goto 2 else goto 3
-2: y <- y + 1
+0: x <- x + y
+1: goto 3
+2: y <- 100
 3: stop
 x y
