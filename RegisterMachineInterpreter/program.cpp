@@ -8,10 +8,6 @@ int main() {
 
 	RM.run();
 
-	RM.print_commands();
-	std::cout << std::endl;
-	RM.print_registers();
-
 
 
 	return 0;

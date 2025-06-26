@@ -14,6 +14,13 @@ void register_machine::parse_input_arguments(const std::string& line) {
 	}
 }
 
+void register_machine::parse_output_arguments(const std::string& line) {
+	std::string variable;
+	std::istringstream iss(line);
+	while (iss >> variable) 
+		this->_output_registers.push_back(variable);
+}
+
 void register_machine::print_commands() const {
 	for (const auto& x : this->_commands)
 		std::cout << x.first << ":" << x.second << std::endl;
@@ -26,6 +33,12 @@ void register_machine::print_registers() const {
 void register_machine::run() {
 	load_commands();
 	execute_commands();
+	print_output_registers();
+}
+
+void register_machine::print_output_registers() const {
+	for (const auto& x : this->_output_registers)
+		std::cout << x << " = " << this->_registers.at(x);
 }
 
 void register_machine::execute_commands() {
@@ -163,4 +176,7 @@ void register_machine::load_commands() {
 		std::string instruction = line.substr(temp + 1);
 		this->_commands.emplace_back(mark, instruction); // TODO: добавить проверку на корректность марки инструкции
 	}
+	// Последняя строка - выходные аргументы
+	std::getline(ifs, line);
+	this->parse_output_arguments(line);
 }

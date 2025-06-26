@@ -22,6 +22,7 @@ private:
 	size_t _carriage; // Каретка
 	std::unordered_map<std::string, int> _registers; // Переменные
 	std::vector<std::pair<std::string, std::string>> _commands; // Список комманд
+	std::vector<std::string> _output_registers;
 	std::string _filename; // Имя файла
 public:
 	register_machine(const std::string& filename) : _filename(filename), _carriage(0), _registers() {}
@@ -35,12 +36,14 @@ public:
 
 	void print_commands() const;
 	void print_registers() const;
+	void print_output_registers() const;
 private:
-	void parse_input_arguments(const std::string& line);
-	void assigment_command(const std::string& command);
-	void condition_command(const std::string& command);
-	void stop_command();
-	void trim(std::string& line) const;
+	void parse_input_arguments(const std::string& line); // Парсинг аргументов
+	void parse_output_arguments(const std::string& line); // Парсинг результатов
+	void assigment_command(const std::string& command); // Выполнение инструкции присваивания
+	void condition_command(const std::string& command); // Выполнение условной инструкции
+	void stop_command(); // Выполнение остановочной инструкции
+	void trim(std::string& line) const; // Удаление лишних пробелов слева и справа от строки
 	
 };
 
