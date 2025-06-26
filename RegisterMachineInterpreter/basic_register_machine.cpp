@@ -1,11 +1,12 @@
-#include "register_machine.h"
+#include "basic_register_machine.h"
 #include <fstream>
 #include <iostream>
+#include <regex>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 
-void register_machine::parse_input_arguments(const std::string& line) {
+void basic_register_machine::parse_input_arguments(const std::string& line) {
 	std::string variable;
 	std::istringstream iss(line);
 	while (iss >> variable) {
@@ -14,34 +15,44 @@ void register_machine::parse_input_arguments(const std::string& line) {
 	}
 }
 
-void register_machine::parse_output_arguments(const std::string& line) {
+bool basic_register_machine::is_valid_condition_command(const std::string& command) const {
+	std::string pattern{R"(^\s*if\s+(\w+)\s*==\s*0\s+then\s+goto\s+(\d+)\s+else\s+goto\s+(\d+)\s*$)"};
+	std::regex regex{ pattern };
+	return std::regex_match(command, regex);
+}
+
+bool basic_register_machine::is_valid_assignment_command(const std::string& command) const {
+	std::string pattern{ R"(^\s*(\w+)\s*<-\s*(?:(\d+)|(\w+)\s*([+\-])\s*1|1\s*([+\-])\s*(\w+))\s*$)" };
+	std::regex regex{ pattern };
+	return std::regex_match(command, regex);
+}
+
+
+bool basic_register_machine::is_valid_stop_command(const std::string& command) const {
+	std::string pattern{ R"(^stop$)" };
+	std::regex regex{ pattern };
+	return std::regex_match(command, regex);
+}
+
+void basic_register_machine::parse_output_arguments(const std::string& line) {
 	std::string variable;
 	std::istringstream iss(line);
 	while (iss >> variable)
 		this->_output_registers.push_back(variable);
 }
 
-void register_machine::print_commands() const {
-	for (const auto& x : this->_commands)
-		std::cout << x << std::endl;
-}
-void register_machine::print_registers() const {
-	for (const auto& x : this->_registers)
-		std::cout << x.first << " = " << x.second << std::endl;
-}
-
-void register_machine::run() {
+void basic_register_machine::run() {
 	load_commands();
 	execute_commands();
 	print_output_registers();
 }
 
-void register_machine::print_output_registers() const {
+void basic_register_machine::print_output_registers() const {
 	for (const auto& x : this->_output_registers)
 		std::cout << x << " = " << this->_registers.at(x); // TODO: at - лишнее копирование...
 }
 
-void register_machine::execute_commands() {
+void basic_register_machine::execute_commands() {
 	while (true) {
 		const auto& command = this->_commands[this->_carriage];
 
@@ -55,7 +66,7 @@ void register_machine::execute_commands() {
 		}
 
 		if (command.find(STOP) != std::string::npos) {
-			stop_command();
+			stop_command(command);
 			break;
 		}
 	}
@@ -63,18 +74,15 @@ void register_machine::execute_commands() {
 
 }
 
-void register_machine::condition_command(const std::string& command) {
+void basic_register_machine::condition_command(const std::string& command) {
+	if (!is_valid_condition_command(command))
+		throw std::invalid_argument("The conditional construct has an invalid format");
+
 	auto if_position = command.find(IF);
 	auto then_position = command.find(THEN);
 	auto else_position = command.find(ELSE);
 	auto goto1_position = command.find(GOTO, if_position);
 	auto goto2_position = command.find(GOTO, else_position);
-
-	if (if_position == std::string::npos || then_position == std::string::npos || else_position == std::string::npos
-		|| goto1_position == std::string::npos || goto2_position == std::string::npos)
-		throw std::invalid_argument("");
-	if (!(if_position < then_position && then_position < goto1_position && goto1_position < else_position && else_position < goto2_position))
-		throw std::invalid_argument("");
 
 	std::string condition = command.substr(if_position + 2, then_position - if_position - 2);
 	std::string true_L = command.substr(goto1_position + 4, else_position - goto1_position - 4);
@@ -101,18 +109,24 @@ void register_machine::condition_command(const std::string& command) {
 }
 
 
-void register_machine::stop_command() {
+void basic_register_machine::stop_command(const std::string& command) {
+	if (!this->is_valid_stop_command(command))
+		throw std::invalid_argument("The stop instruction is in an invalid format");
+
 	this->_carriage = 0;
 }
 
-void register_machine::trim(std::string& line) const {
+void basic_register_machine::trim(std::string& line) const {
 	size_t start = line.find_first_not_of(" \t\r\n");
 	size_t end = line.find_last_not_of(" \t\r\n");
 	if (start == std::string::npos) line = "";
 	else line = line.substr(start, end - start + 1);
 }
 
-void register_machine::assigment_command(const std::string& command) {
+void basic_register_machine::assigment_command(const std::string& command) {
+	if (!is_valid_assignment_command(command))
+		throw std::invalid_argument("The assignment statement has an invalid format");
+
 	auto separator = command.find(ASSIGNMENT);
 	std::string left_part = command.substr(0, separator);
 	std::string right_part = command.substr(separator + 2); //TODO: 2 - магическое число, нужно использовать length
@@ -155,7 +169,7 @@ void register_machine::assigment_command(const std::string& command) {
 	return;
 }
 
-void register_machine::load_commands() {
+void basic_register_machine::load_commands() {
 	std::ifstream ifs(this->_filename);
 	std::string line;
 
@@ -170,6 +184,7 @@ void register_machine::load_commands() {
 
 		std::string mark = line.substr(0, temp);
 		std::string instruction = line.substr(temp + 1);
+		this->trim(instruction);
 
 		if (std::stoi(mark) != expected_mark) throw std::invalid_argument(""); // Проверка, что метки пронумерованы последовательно, без рывков, т.е. 0 -> 1 -> 2 -> ...
 
