@@ -6,7 +6,7 @@ int main() {
 	setlocale(LC_ALL, "Russian");
 
 	std::string filename{ "RM1.txt" };
-	extended_register_machine RM(filename, false);
+	extended_register_machine RM(filename, true);
 
 	RM.run();
 	RM.print_output_registers(" ");

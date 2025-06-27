@@ -30,5 +30,6 @@
   <ItemGroup>
     <Text Include="RM1.txt" />
     <Text Include="RM2.txt" />
+    <Text Include="RM3.txt" />
   </ItemGroup>
 </Project>

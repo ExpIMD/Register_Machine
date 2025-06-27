@@ -1,3 +1,4 @@
+call RM3.txt
 a b
 0: a <- a + 1
 1: b <- b + 1

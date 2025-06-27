@@ -109,7 +109,7 @@ protected:
 class extended_register_machine : public basic_register_machine {
 protected:
 	std::vector<std::string> _composition_commands;
-	static bool _input_initialized;
+	static std::vector<int> input_register_values;
 
 public:
 	extended_register_machine(const std::string& filename, bool is_verbose = false) : basic_register_machine(filename, is_verbose) {}

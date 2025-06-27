@@ -6,7 +6,7 @@
 #include <stdexcept>
 #include <string>
 
-bool extended_register_machine::_input_initialized = false;
+std::vector<int> extended_register_machine::input_register_values = {};
 
 // Запуск РМ
 void basic_register_machine::run() {
@@ -124,16 +124,28 @@ void basic_register_machine::execute_all_instructions() {
 
 // Выполнение всех команд
 void extended_register_machine::execute_all_instructions() {
-	if (this->_composition_commands.size() > 0)
+	if (this->_composition_commands.size() > 0) {
 		for (const auto& x : this->_composition_commands)
 			this->execute_composition_command(x);
+		size_t index{ 0 };
+		for (auto& x : this->_input_registers) {
+			this->_registers[x] = input_register_values[index];
+			++index;
+		}
+	}
 	else {
-		if (!_input_initialized) {
+		if (input_register_values.empty()) {
 			for (const auto& x : this->_input_registers) {
 				std::cout << "Введите значения для " << x << ": ";
 				std::cin >> this->_registers[x];
 			}
-			_input_initialized = true;
+		}
+		else {
+			size_t index{ 0 };
+			for (auto& x : this->_input_registers) {
+				this->_registers[x] = input_register_values[index];
+				++index;
+			}
 		}
 	}
 
@@ -274,11 +286,11 @@ void extended_register_machine::execute_composition_command(const std::string& c
 
 	auxiliary_rm.run();
 
+	input_register_values.clear(); // TODO: постоянный вызов clear неэффективен
+
 	for (size_t i{ 0 }; i < auxiliary_rm._output_registers.size(); ++i) {
 		const std::string& output_register = auxiliary_rm._output_registers[i];
-		const std::string& input_register = this->_input_registers[i];
-
-		this->_registers[input_register] = auxiliary_rm._registers.at(output_register);
+		input_register_values.push_back(auxiliary_rm._registers.at(output_register));
 	}
 }
 
