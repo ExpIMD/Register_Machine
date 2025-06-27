@@ -30,7 +30,7 @@ void trim(std::string& line);
 
 // Класс базовой РМ
 class basic_register_machine {
-public:
+protected:
 	// Каретка, хранящая номер текущей инструкции
 	size_t _carriage;
 
@@ -50,6 +50,8 @@ public:
 	std::string _filename;
 
 	bool _is_verbose;
+
+	std::stack<std::pair<std::string, bool>> _file_stack;
 public:
 	// Конструктор
 	basic_register_machine(const std::string& filename, bool is_verbose = false) noexcept : _filename(filename), _is_verbose(is_verbose), _carriage(0), _registers(), _instructions(), _output_registers() {}
@@ -67,6 +69,11 @@ public:
 	// Запуск РМ
 	virtual void run();
 
+	virtual void reset();
+
+protected:
+
+
 	// Печать входных регистров
 	void print_input_registers(const std::string& separator) const;
 	// Печать всех регистров
@@ -76,12 +83,8 @@ public:
 	// Печать каретки
 	void print_carriage(const std::string& separator) const;
 
-	virtual void reset();
-
-public:
-
 	// Загрузка всех команд
-	virtual void load_all_commands();
+	virtual void load_all_instructions();
 	// Выполнение всех команд
 	virtual void execute_all_instructions();
 
@@ -105,8 +108,8 @@ public:
 	void parse_output_arguments(const std::string& line);
 
 	// Проверка, что в строке записана переменная
-	bool is_variable(const std::string& line) const;
-	// Получает целочисленное значение из строки
+	bool is_variable(const std::string& line) const; // TODO: задать стандарт именования переменной
+	// Получает целочисленное значение из строки, в которой может быть описани литерал или регистр
 	int get_value(const std::string& line);
 };
 
@@ -119,17 +122,17 @@ public:
 	extended_register_machine(const std::string& filename, bool is_verbose = false) : basic_register_machine(filename, is_verbose), input_register_values() {}
 	extended_register_machine(std::string&& filename, bool is_verbose = false) : basic_register_machine(filename, is_verbose), input_register_values() {}
 	~extended_register_machine() = default;
+	// Запуск РМ
+	void run() override;
+	// Сброс РМ
+	void reset() override;
 
 public:
 
-	// Запуск РМ
-	void run() override;
-
-
-	void reset() override;
+	void execute();
 
 	void execute_all_instructions() override;
-	void load_all_commands() override;
+	void load_all_instructions() override;
 
 	void execute_assigment_instruction(const std::string& command) override;
 	void execute_condition_instruction(const std::string& command) override;
@@ -143,21 +146,7 @@ public:
 
 	bool is_valid_condition_instruction(const std::string& command) const override;
 	bool is_valid_assignment_instruction(const std::string& command) const override;
-};
 
-class extended_register_machine_manager {
-protected:
-	extended_register_machine _erm;
-	std::stack<std::pair<std::string, bool>> _file_stack;
-	std::vector<int> results; // Вектор выходных регистров
-public:
-	extended_register_machine_manager(const std::string& filename, bool is_verbose = false) : _erm(filename, is_verbose), _file_stack() {}
-	~extended_register_machine_manager() = default;
-
-	// Запуск менеджера
-	void run();
-
-protected:
 	void _include_files(const std::string& filename);
 };
 

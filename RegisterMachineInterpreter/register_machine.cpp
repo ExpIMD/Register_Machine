@@ -20,37 +20,7 @@ void extended_register_machine::reset() {
 	this->input_register_values.resize(0);
 }
 
-void extended_register_machine_manager::run() {
-	this->_include_files(_erm._filename);
-	while (!this->_file_stack.empty()) {
-		auto [file, flag] = this->_file_stack.top();
-		this->_file_stack.pop();
-
-		if (!flag) {
-			_include_files(file);
-		}
-		else {
-			this->_erm.reset();
-			this->_erm._filename = file;
-			this->_erm.input_register_values = this->results;
-			this->_erm.run();
-			this->results.resize(0);
-			for (const auto& x : this->_erm._output_registers)
-				this->results.push_back(this->_erm._registers[x]);
-			// Передача аргументов в РМ (возможно пустых для первого запуска)
-			// Выполнение этой регистровой машины
-			// Сохранение результата
-			// Очищение РМ
-		}
-	}
-
-	for (const auto& x : this->results) {
-		std::cout << x << " ";
-	}
-}
-
-
-void extended_register_machine_manager::_include_files(const std::string& filename) {
+void extended_register_machine::_include_files(const std::string& filename) {
 	std::ifstream ifs(filename);
 	std::string line;
 	std::vector<std::string> filenames;
@@ -69,31 +39,58 @@ void extended_register_machine_manager::_include_files(const std::string& filena
 
 // Запуск РМ
 void basic_register_machine::run() {
-	load_all_commands();
+	load_all_instructions();
 	execute_all_instructions();
+}
+
+void extended_register_machine::execute() {
+	while (!this->_file_stack.empty()) {
+		auto [file, flag] = this->_file_stack.top();
+		this->_file_stack.pop();
+
+		if (!flag) {
+			_include_files(file);
+		}
+		else {
+
+			std::vector<int> results{};
+			for (const auto& x : this->_output_registers)
+				results.push_back(this->_registers[x]);
+
+			this->reset();
+			this->_filename = file;
+			this->input_register_values = results;
+			load_all_instructions();
+			if (this->input_register_values.size() > 0) {
+				size_t index{ 0 };
+				for (const auto& x : this->_input_registers) {
+					this->_registers[x] = this->input_register_values[index];
+					++index;
+				}
+			}
+			else {
+				for (const auto& x : this->_input_registers) {
+					std::cout << "Введите значения для " << x << ": ";
+					std::cin >> this->_registers[x];
+				}
+			}
+			execute_all_instructions();
+			// Передача аргументов в РМ (возможно пустых для первого запуска)
+			// Выполнение этой регистровой машины
+			// Сохранение результата
+			// Очищение РМ
+		}
+	}
 }
 
 // Запуск РМ
 void extended_register_machine::run() {
-	load_all_commands();
-	if (this->input_register_values.size() > 0) {
-		size_t index{ 0 };
-		for (const auto& x : this->_input_registers) {
-			this->_registers[x] = this->input_register_values[index];
-			++index;
-		}
-	}
-	else {
-		for (const auto& x : this->_input_registers) {
-			std::cout << "Введите значения для " << x << ": ";
-			std::cin >> this->_registers[x];
-		}
-	}
-	execute_all_instructions();
+	this->_include_files(_filename);
+	this->execute();
 }
 
 // Загрузка всех команд
-void basic_register_machine::load_all_commands() {
+void basic_register_machine::load_all_instructions() {
 	std::ifstream ifs(this->_filename);
 	std::string line;
 
@@ -129,7 +126,7 @@ void basic_register_machine::load_all_commands() {
 }
 
 // Загрузка всех команд
-void extended_register_machine::load_all_commands() {
+void extended_register_machine::load_all_instructions() {
 	std::ifstream ifs(this->_filename);
 	std::string line;
 

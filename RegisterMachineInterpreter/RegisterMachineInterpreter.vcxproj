@@ -129,7 +129,6 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="example.h" />
     <ClInclude Include="register_machine.h" />
   </ItemGroup>
   <ItemGroup>
