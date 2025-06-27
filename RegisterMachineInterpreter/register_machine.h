@@ -70,8 +70,8 @@ public:
 	void print_output_registers(const std::string& separator) const;
 
 	void print_carriage(const std::string& separator) const;
-protected:
 
+protected:
 
 	// Загрузка всех команд
 	virtual void load_all_commands();
@@ -109,6 +109,7 @@ protected:
 class extended_register_machine : public basic_register_machine {
 protected:
 	std::vector<std::string> _composition_commands;
+	static bool _input_initialized;
 
 public:
 	extended_register_machine(const std::string& filename, bool is_verbose = false) : basic_register_machine(filename, is_verbose) {}
@@ -116,7 +117,6 @@ public:
 	~extended_register_machine() = default;
 
 protected:
-
 
 	void execute_all_instructions() override;
 	void load_all_commands() override;
@@ -135,7 +135,7 @@ protected:
 	bool is_valid_condition_instruction(const std::string& command) const override;
 
 	bool is_valid_assignment_instruction(const std::string& command) const override;
-
 };
+
 
 #endif

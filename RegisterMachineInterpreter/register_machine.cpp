@@ -6,6 +6,8 @@
 #include <stdexcept>
 #include <string>
 
+bool extended_register_machine::_input_initialized = false;
+
 // Запуск РМ
 void basic_register_machine::run() {
 	load_all_commands();
@@ -28,7 +30,6 @@ void basic_register_machine::load_all_commands() {
 		auto separator_position = line.find(SEPARATOR);
 		if (separator_position == std::string::npos) break;
 		
-
 		std::string number = line.substr(0, separator_position);
 		std::string instruction = line.substr(separator_position + SEPARATOR.length());
 		this->trim(instruction);
@@ -67,7 +68,6 @@ void extended_register_machine::load_all_commands() {
 	while (std::getline(ifs, line)) {
 		auto separator_position = line.find(SEPARATOR);
 		if (separator_position == std::string::npos) break;
-
 
 		std::string number = line.substr(0, separator_position);
 		std::string instruction = line.substr(separator_position + SEPARATOR.length());
@@ -124,8 +124,18 @@ void basic_register_machine::execute_all_instructions() {
 
 // Выполнение всех команд
 void extended_register_machine::execute_all_instructions() {
-	for (const auto& x : this->_composition_commands)
-		this->execute_composition_command(x);
+	if (this->_composition_commands.size() > 0)
+		for (const auto& x : this->_composition_commands)
+			this->execute_composition_command(x);
+	else {
+		if (!_input_initialized) {
+			for (const auto& x : this->_input_registers) {
+				std::cout << "Введите значения для " << x << ": ";
+				std::cin >> this->_registers[x];
+			}
+			_input_initialized = true;
+		}
+	}
 
 	while (true) {
 		const auto& command = this->_instructions[this->_carriage];
@@ -141,12 +151,6 @@ void extended_register_machine::execute_all_instructions() {
 		// TODO: оператор сброса регистров reset
 		// TODO: оператор деления и умножения
 		// TODO: swap
-
-		if (command.find(COMPOSITION) != std::string::npos) {
-			this->execute_composition_command(command);
-			++this->_carriage;
-			continue;
-		}
 
 		if (command.find(MOVE) != std::string::npos) {
 			this->execute_move_command(command);
@@ -299,8 +303,6 @@ void basic_register_machine::parse_input_arguments(const std::string& line) {
 	std::istringstream iss(line);
 	while (iss >> variable) {
 		_input_registers.push_back(variable);
-		std::cout << "Введите значение для " << variable << ": ";
-		std::cin >> this->_registers[variable];
 	}
 }
 
@@ -419,7 +421,6 @@ void basic_register_machine::execute_condition_instruction(const std::string& co
 	auto goto1_position = command.find(GOTO, if_position);
 	auto goto2_position = command.find(GOTO, else_position);
 	
-
 	std::string condition = command.substr(if_position + IF.length(), then_position - if_position - std::string(IF).length());
 	std::string true_L = command.substr(goto1_position + GOTO.length(), else_position - goto1_position - std::string(GOTO).length());
 	std::string false_L = command.substr(goto2_position + GOTO.length());
@@ -451,7 +452,6 @@ void extended_register_machine::execute_condition_instruction(const std::string&
 	auto else_position = command.find(ELSE);
 	auto goto1_position = command.find(GOTO, if_position);
 	auto goto2_position = command.find(GOTO, else_position);
-
 
 	std::string condition = command.substr(if_position + IF.length(), then_position - if_position - std::string(IF).length());
 	std::string true_L = command.substr(goto1_position + GOTO.length(), else_position - goto1_position - std::string(GOTO).length());
