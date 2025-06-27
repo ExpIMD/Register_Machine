@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <string>
 
+// Сброс РМ
 void basic_register_machine::reset() {
 	this->_carriage = 0;
 	this->_registers.clear();
@@ -15,11 +16,7 @@ void basic_register_machine::reset() {
 	this->_filename = ""s;
 }
 
-void extended_register_machine::reset() {
-	basic_register_machine::reset();
-	this->input_register_values.resize(0);
-}
-
+// Обработка всех инструкций COMPOSITION в текущем файла и добавление включаемых файлов в стек
 void extended_register_machine::_include_files(const std::string& filename) {
 	std::ifstream ifs(filename);
 	std::string line;
@@ -27,29 +24,41 @@ void extended_register_machine::_include_files(const std::string& filename) {
 
 	_file_stack.push({ filename, true });
 
-	while (std::getline(ifs, line) && line.find(COMPOSITION) != std::string::npos) {
-		auto temp = line.find(COMPOSITION);
-		auto filename = line.substr(temp + COMPOSITION.length());
+	while (std::getline(ifs, line)) {
+		auto composition_position = line.find(COMPOSITION);
+		if (composition_position == std::string::npos) break;
+
+		auto filename = line.substr(composition_position + COMPOSITION.length()); // Получение имени включаемого файла
+
 		trim(filename);
+
 		filenames.push_back(filename);
 	}
 
-	for (auto it = filenames.rbegin(); it != filenames.rend(); ++it) _file_stack.push({ *it, false });
+	for (auto it = filenames.rbegin(); it != filenames.rend(); ++it)
+		_file_stack.push({ *it, false });
 }
 
 // Запуск РМ
 void basic_register_machine::run() {
-	load_all_instructions();
-	execute_all_instructions();
+	this->load_all_instructions();
+	for (const auto& x : this->_input_registers) {
+		std::cout << "Введите значения для " << x << ": ";
+		std::cin >> this->_registers[x];
+	}
+	this->execute_all_instructions();
+	this->print_output_registers(" ");
 }
 
-void extended_register_machine::execute() {
+// Запуск РМ
+void extended_register_machine::run() {
+	this->_include_files(_filename);
 	while (!this->_file_stack.empty()) {
 		auto [file, flag] = this->_file_stack.top();
 		this->_file_stack.pop();
 
 		if (!flag) {
-			_include_files(file);
+			this->_include_files(file);
 		}
 		else {
 
@@ -58,13 +67,14 @@ void extended_register_machine::execute() {
 				results.push_back(this->_registers[x]);
 
 			this->reset();
+
 			this->_filename = file;
-			this->input_register_values = results;
-			load_all_instructions();
-			if (this->input_register_values.size() > 0) {
+			this->load_all_instructions();
+
+			if (results.size() > 0) {
 				size_t index{ 0 };
 				for (const auto& x : this->_input_registers) {
-					this->_registers[x] = this->input_register_values[index];
+					this->_registers[x] = results[index];
 					++index;
 				}
 			}
@@ -74,19 +84,14 @@ void extended_register_machine::execute() {
 					std::cin >> this->_registers[x];
 				}
 			}
-			execute_all_instructions();
+			this->execute_all_instructions();
 			// Передача аргументов в РМ (возможно пустых для первого запуска)
 			// Выполнение этой регистровой машины
 			// Сохранение результата
 			// Очищение РМ
 		}
 	}
-}
-
-// Запуск РМ
-void extended_register_machine::run() {
-	this->_include_files(_filename);
-	this->execute();
+	this->print_output_registers(" ");
 }
 
 // Загрузка всех команд
@@ -130,8 +135,7 @@ void extended_register_machine::load_all_instructions() {
 	std::ifstream ifs(this->_filename);
 	std::string line;
 
-	// Обработка команд композиции
-	while (std::getline(ifs, line) && line.find(COMPOSITION) != std::string::npos);
+	while (std::getline(ifs, line) && line.find(COMPOSITION) != std::string::npos); // Команда композиции не является инструкцией, поэтому пропускаем её
 
 	// Обработка аргументов
 	parse_input_arguments(line);
@@ -207,11 +211,6 @@ void extended_register_machine::execute_all_instructions() {
 			std::cout << std::endl;
 			std::cout << this->_carriage << ": " << instruction << std::endl;
 		}
-
-		// TODO: оператор композиции не реализован call
-		// TODO: оператор сброса регистров reset
-		// TODO: оператор деления и умножения
-		// TODO: swap
 
 		if (instruction.find(MOVE) != std::string::npos) {
 			this->execute_move_command(instruction);
@@ -341,9 +340,8 @@ bool basic_register_machine::is_valid_stop_instruction(const std::string& comman
 void basic_register_machine::parse_input_arguments(const std::string& line) {
 	std::string variable;
 	std::istringstream iss(line);
-	while (iss >> variable) {
-		_input_registers.push_back(variable);
-	}
+	while (iss >> variable) 
+		this->_input_registers.push_back(variable);
 }
 
 // Парсинг результатов (выходных регистров)

@@ -31,10 +31,10 @@ void trim(std::string& line);
 // Класс базовой РМ
 class basic_register_machine {
 protected:
-	// Каретка, хранящая номер текущей инструкции
+	// Каретка, описывающая номер текущей инструкции
 	size_t _carriage;
 
-	// Словарь регистров (переменных)
+	// Словарь регистров
 	std::unordered_map<std::string, int> _registers;
 
 	// Вектор инструкций
@@ -43,36 +43,33 @@ protected:
 	// Вектор выходных регистров
 	std::vector<std::string> _output_registers;
 
-	// Вектор аргументов
+	// Вектор входных регистров
 	std::vector<std::string> _input_registers;
 
 	// Имя обрабатываемого файла
 	std::string _filename;
 
+	// Флаг, указывающий режим подробного вывода работы РМ
 	bool _is_verbose;
 
-	std::stack<std::pair<std::string, bool>> _file_stack;
 public:
 	// Конструктор
 	basic_register_machine(const std::string& filename, bool is_verbose = false) noexcept : _filename(filename), _is_verbose(is_verbose), _carriage(0), _registers(), _instructions(), _output_registers() {}
 	// Move-Конструктор
 	basic_register_machine(std::string&& filename, bool is_verbose = false) noexcept : _filename(std::move(filename)), _is_verbose(is_verbose), _carriage(0), _registers(), _instructions(), _output_registers() {}
-
-	// Оператор присваивания
-	basic_register_machine& operator=(const basic_register_machine& other) noexcept;
-	// Оператор move-присваивания
-	basic_register_machine& operator=(basic_register_machine&& other) noexcept;
-
+	
 	// Деструктор
 	virtual ~basic_register_machine() = default;
 
+	// Оператор присваивания
+	basic_register_machine& operator=(const basic_register_machine& other) noexcept;
+	// Move-оператор присваивания
+	basic_register_machine& operator=(basic_register_machine&& other) noexcept;
+
 	// Запуск РМ
 	virtual void run();
-
+	// Сброс РМ
 	virtual void reset();
-
-protected:
-
 
 	// Печать входных регистров
 	void print_input_registers(const std::string& separator) const;
@@ -83,9 +80,10 @@ protected:
 	// Печать каретки
 	void print_carriage(const std::string& separator) const;
 
+protected:
 	// Загрузка всех команд
 	virtual void load_all_instructions();
-	// Выполнение всех команд
+	// Выполнение всех инструкций
 	virtual void execute_all_instructions();
 
 	// Проверка корректности формата условной инструкции
@@ -109,28 +107,31 @@ protected:
 
 	// Проверка, что в строке записана переменная
 	bool is_variable(const std::string& line) const; // TODO: задать стандарт именования переменной
+
 	// Получает целочисленное значение из строки, в которой может быть описани литерал или регистр
 	int get_value(const std::string& line);
 };
 
 // Класс расширенной РМ
 class extended_register_machine : public basic_register_machine {
-public:
-	std::vector<int> input_register_values;
+protected:
+	// Стек для управления порядком обработки файлов РМ: пара <имя файла, флаг обработки всех COMPOSITION>
+	std::stack<std::pair<std::string, bool>> _file_stack;
 
 public:
-	extended_register_machine(const std::string& filename, bool is_verbose = false) : basic_register_machine(filename, is_verbose), input_register_values() {}
-	extended_register_machine(std::string&& filename, bool is_verbose = false) : basic_register_machine(filename, is_verbose), input_register_values() {}
+	// Конструктор
+	extended_register_machine(const std::string& filename, bool is_verbose = false) : basic_register_machine(filename, is_verbose) {}
+	// Move-конструктор
+	extended_register_machine(std::string&& filename, bool is_verbose = false) : basic_register_machine(filename, is_verbose) {}
+
+	// Деструктор
 	~extended_register_machine() = default;
+
 	// Запуск РМ
 	void run() override;
-	// Сброс РМ
-	void reset() override;
 
-public:
-
-	void execute();
-
+protected:
+	// Выполнение всех инструкций
 	void execute_all_instructions() override;
 	void load_all_instructions() override;
 
