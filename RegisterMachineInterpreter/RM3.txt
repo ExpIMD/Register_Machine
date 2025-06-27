@@ -1,3 +1,4 @@
+call RM2.txt
 c k
 0: c <- c + 2
 1: k <- k + 2

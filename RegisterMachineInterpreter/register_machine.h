@@ -4,6 +4,8 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <regex>
+#include <stack>
 
 using namespace std::string_literals;
 
@@ -23,9 +25,12 @@ using namespace std::string_literals;
 #define RESET "reset"s
 #define COMPOSITION "call"s
 
+// Удаление лишних пробелов слева и справа от строки
+void trim(std::string& line);
+
 // Класс базовой РМ
 class basic_register_machine {
-protected:
+public:
 	// Каретка, хранящая номер текущей инструкции
 	size_t _carriage;
 
@@ -68,10 +73,12 @@ public:
 	void print_all_registers(const std::string& separator) const;
 	// Печать выходных регистров
 	void print_output_registers(const std::string& separator) const;
-
+	// Печать каретки
 	void print_carriage(const std::string& separator) const;
 
-protected:
+	virtual void reset();
+
+public:
 
 	// Загрузка всех команд
 	virtual void load_all_commands();
@@ -97,8 +104,6 @@ protected:
 	// Парсинг результатов (выходных регистров)
 	void parse_output_arguments(const std::string& line);
 
-	// Удаление лишних пробелов слева и справа от строки
-	void trim(std::string& line) const;
 	// Проверка, что в строке записана переменная
 	bool is_variable(const std::string& line) const;
 	// Получает целочисленное значение из строки
@@ -107,16 +112,21 @@ protected:
 
 // Класс расширенной РМ
 class extended_register_machine : public basic_register_machine {
-protected:
-	std::vector<std::string> _composition_commands;
-	static std::vector<int> input_register_values;
+public:
+	std::vector<int> input_register_values;
 
 public:
-	extended_register_machine(const std::string& filename, bool is_verbose = false) : basic_register_machine(filename, is_verbose) {}
-	extended_register_machine(std::string&& filename, bool is_verbose = false) : basic_register_machine(filename, is_verbose) {}
+	extended_register_machine(const std::string& filename, bool is_verbose = false) : basic_register_machine(filename, is_verbose), input_register_values() {}
+	extended_register_machine(std::string&& filename, bool is_verbose = false) : basic_register_machine(filename, is_verbose), input_register_values() {}
 	~extended_register_machine() = default;
 
-protected:
+public:
+
+	// Запуск РМ
+	void run() override;
+
+
+	void reset() override;
 
 	void execute_all_instructions() override;
 	void load_all_commands() override;
@@ -126,15 +136,29 @@ protected:
 
 	void execute_move_command(const std::string& command);
 	void execute_goto_command(const std::string& command);
-	void execute_composition_command(const std::string& command);
 
 	// Проверка корректности формата перемещающей команды
 	bool is_valid_move_command(const std::string& command) const;
 	bool is_valid_goto_command(const std::string& command) const;
 
 	bool is_valid_condition_instruction(const std::string& command) const override;
-
 	bool is_valid_assignment_instruction(const std::string& command) const override;
+};
+
+class extended_register_machine_manager {
+protected:
+	extended_register_machine _erm;
+	std::stack<std::pair<std::string, bool>> _file_stack;
+	std::vector<int> results; // Вектор выходных регистров
+public:
+	extended_register_machine_manager(const std::string& filename, bool is_verbose = false) : _erm(filename, is_verbose), _file_stack() {}
+	~extended_register_machine_manager() = default;
+
+	// Запуск менеджера
+	void run();
+
+protected:
+	void _include_files(const std::string& filename);
 };
 
 

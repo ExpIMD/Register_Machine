@@ -6,10 +6,10 @@ int main() {
 	setlocale(LC_ALL, "Russian");
 
 	std::string filename{ "RM1.txt" };
-	extended_register_machine RM(filename, true);
+	extended_register_machine_manager RMM(filename, false);
 
-	RM.run();
-	RM.print_output_registers(" ");
+	RMM.run();
+	
 
 
 
