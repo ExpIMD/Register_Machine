@@ -36,7 +36,7 @@ void basic_register_machine::load_all_commands() {
 		if (std::stoi(number) != expected_number)
 			throw std::invalid_argument("The instructions are not written in sequence");
 
-		this->_instructions.emplace_back(instruction);
+		this->_instructions.push_back(instruction);
 		++expected_number;
 	}
 
@@ -89,10 +89,21 @@ void extended_register_machine::load_all_commands() {
 		throw std::invalid_argument("Unexpected data after output registers");
 }
 
+void basic_register_machine::print_carriage(const std::string& separator) const {
+	std::cout << "carriage: " << this->_carriage << separator;
+}
+
 // Выполнение всех команд
 void basic_register_machine::execute_all_instructions() {
 	while (true) {
 		const auto& command = this->_instructions[this->_carriage];
+
+		if (this->_is_verbose) {
+			this->print_carriage(" ");
+			this->print_all_registers(" ");
+			std::cout << std::endl;
+			std::cout << this->_carriage << ": " << command << std::endl;
+		}
 
 		// TODO: оператор композиции не реализован
 
@@ -118,6 +129,13 @@ void extended_register_machine::execute_all_instructions() {
 
 	while (true) {
 		const auto& command = this->_instructions[this->_carriage];
+
+		if (this->_is_verbose) {
+			this->print_carriage(" ");
+			this->print_all_registers(" ");
+			std::cout << std::endl;
+			std::cout << this->_carriage << ": " << command << std::endl;
+		}
 
 		// TODO: оператор композиции не реализован call
 		// TODO: оператор сброса регистров reset
@@ -196,6 +214,15 @@ void extended_register_machine::execute_move_command(const std::string& command)
 	return;
 }
 
+void basic_register_machine::print_all_registers(const std::string& separator) const {
+	for (const auto& [reg, val] : this->_registers) std::cout << reg << ": " << val << separator;
+}
+
+// Печать входных регистров
+void basic_register_machine::print_input_registers(const std::string& separator) const {
+	for (const auto& reg : this->_input_registers) std::cout << reg << ": " << this->_registers.at(reg) << separator;
+}
+
 // Проверка корректности формата перемещающей команды
 bool extended_register_machine::is_valid_move_command(const std::string& command) const {
 	std::string pattern{ R"(^\s*(\w+)\s*<<-\s*(\w+)\s*$)"}; // TODO: не используются макросы
@@ -204,9 +231,9 @@ bool extended_register_machine::is_valid_move_command(const std::string& command
 }
 
 // Печать выходных регистров
-void basic_register_machine::print_output_registers() const {
+void basic_register_machine::print_output_registers(const std::string& separator) const {
 	for (const auto& x : this->_output_registers)
-		std::cout << x << " = " << this->_registers.at(x) << std::endl;
+		std::cout << x << ": " << this->_registers.at(x) << separator;
 }
 
 // Проверка корректности условной инструкции
@@ -487,6 +514,7 @@ basic_register_machine& basic_register_machine::operator=(const basic_register_m
 		this->_instructions = other._instructions;
 		this->_output_registers = other._output_registers;
 		this->_filename = other._filename;
+		this->_is_verbose = other._is_verbose;
 	}
 
 	return *this;
@@ -498,5 +526,6 @@ basic_register_machine& basic_register_machine::operator=(basic_register_machine
 	this->_instructions = std::move(other._instructions);
 	this->_output_registers = std::move(other._output_registers);
 	this->_filename = std::move(other._filename);
+	this->_is_verbose = std::move(other._is_verbose);
 	return *this;
 }

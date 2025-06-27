@@ -43,11 +43,13 @@ protected:
 
 	// Имя обрабатываемого файла
 	std::string _filename;
+
+	bool _is_verbose;
 public:
 	// Конструктор
-	basic_register_machine(const std::string& filename) noexcept : _filename(filename), _carriage(0), _registers(), _instructions(), _output_registers() {}
+	basic_register_machine(const std::string& filename, bool is_verbose = false) noexcept : _filename(filename), _is_verbose(is_verbose), _carriage(0), _registers(), _instructions(), _output_registers() {}
 	// Move-Конструктор
-	basic_register_machine(std::string&& filename) noexcept : _filename(std::move(filename)), _carriage(0), _registers(), _instructions(), _output_registers() {}
+	basic_register_machine(std::string&& filename, bool is_verbose = false) noexcept : _filename(std::move(filename)), _is_verbose(is_verbose), _carriage(0), _registers(), _instructions(), _output_registers() {}
 
 	// Оператор присваивания
 	basic_register_machine& operator=(const basic_register_machine& other) noexcept;
@@ -60,8 +62,14 @@ public:
 	// Запуск РМ
 	virtual void run();
 
+	// Печать входных регистров
+	void print_input_registers(const std::string& separator) const;
+	// Печать всех регистров
+	void print_all_registers(const std::string& separator) const;
 	// Печать выходных регистров
-	void print_output_registers() const;
+	void print_output_registers(const std::string& separator) const;
+
+	void print_carriage(const std::string& separator) const;
 protected:
 
 
@@ -103,8 +111,8 @@ protected:
 	std::vector<std::string> _composition_commands;
 
 public:
-	extended_register_machine(const std::string& filename) : basic_register_machine(filename) {}
-	extended_register_machine(std::string&& filename) : basic_register_machine(filename) {}
+	extended_register_machine(const std::string& filename, bool is_verbose = false) : basic_register_machine(filename, is_verbose) {}
+	extended_register_machine(std::string&& filename, bool is_verbose = false) : basic_register_machine(filename, is_verbose) {}
 	~extended_register_machine() = default;
 
 protected:
