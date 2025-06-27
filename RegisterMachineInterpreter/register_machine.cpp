@@ -9,8 +9,7 @@
 // Запуск РМ
 void basic_register_machine::run() {
 	load_all_commands();
-	execute_all_commands();
-	print_output_registers();
+	execute_all_instructions();
 }
 
 // Загрузка всех команд
@@ -19,9 +18,11 @@ void basic_register_machine::load_all_commands() {
 	std::string line;
 
 	// Первая строка содержит аргументы, разделённые пробелами
-	if (std::getline(ifs, line)) parse_input_arguments(line);
+	if (std::getline(ifs, line))
+		parse_input_arguments(line);
 
 	// Последующие строки, за исключением последней, содержат метки
+
 	size_t expected_number{ 0 };
 	while (std::getline(ifs, line)) {
 		auto separator_position = line.find(SEPARATOR);
@@ -35,7 +36,47 @@ void basic_register_machine::load_all_commands() {
 		if (std::stoi(number) != expected_number)
 			throw std::invalid_argument("The instructions are not written in sequence");
 
-		this->_commands.emplace_back(instruction);
+		this->_instructions.emplace_back(instruction);
+		++expected_number;
+	}
+
+	// В последней строке описываются выходные регистры
+	std::getline(ifs, line);
+	this->parse_output_arguments(line);
+
+	// Проверка, что после выходных аргументов ничего нет
+	if (std::getline(ifs, line))
+		throw std::invalid_argument("Unexpected data after output registers");
+}
+
+// Загрузка всех команд
+void extended_register_machine::load_all_commands() {
+	std::ifstream ifs(this->_filename);
+	std::string line;
+
+	// Обработка команд композиции
+	while (std::getline(ifs, line) && line.find(COMPOSITION) != std::string::npos)
+		_composition_commands.push_back(line);
+
+	// Обработка аргументов
+	parse_input_arguments(line);
+
+	// Последующие строки, за исключением последней, содержат метки
+
+	size_t expected_number{ 0 };
+	while (std::getline(ifs, line)) {
+		auto separator_position = line.find(SEPARATOR);
+		if (separator_position == std::string::npos) break;
+
+
+		std::string number = line.substr(0, separator_position);
+		std::string instruction = line.substr(separator_position + SEPARATOR.length());
+		this->trim(instruction);
+
+		if (std::stoi(number) != expected_number)
+			throw std::invalid_argument("The instructions are not written in sequence");
+
+		this->_instructions.emplace_back(instruction);
 		++expected_number;
 	}
 
@@ -49,36 +90,45 @@ void basic_register_machine::load_all_commands() {
 }
 
 // Выполнение всех команд
-void basic_register_machine::execute_all_commands() {
+void basic_register_machine::execute_all_instructions() {
 	while (true) {
-		const auto& command = this->_commands[this->_carriage];
+		const auto& command = this->_instructions[this->_carriage];
 
 		// TODO: оператор композиции не реализован
 
 		if (command.find(ASSIGNMENT) != std::string::npos) {
-			this->execute_assigment_command(command);
+			this->execute_assigment_instruction(command);
 			++this->_carriage;
 		}
 
 		if (command.find(IF) != std::string::npos)
-			this->execute_condition_command(command);
+			this->execute_condition_instruction(command);
 
 		if (command.find(STOP) != std::string::npos) { // РМ завершает свою работу только по достижению остановочной инструкции
-			this->execute_stop_command(command);
+			this->execute_stop_instruction(command);
 			break;
 		}
 	}
 }
 
 // Выполнение всех команд
-void extended_register_machine::execute_all_commands() {
+void extended_register_machine::execute_all_instructions() {
+	for (const auto& x : this->_composition_commands)
+		this->execute_composition_command(x);
+
 	while (true) {
-		const auto& command = this->_commands[this->_carriage];
+		const auto& command = this->_instructions[this->_carriage];
 
 		// TODO: оператор композиции не реализован call
 		// TODO: оператор сброса регистров reset
 		// TODO: оператор деления и умножения
 		// TODO: swap
+
+		if (command.find(COMPOSITION) != std::string::npos) {
+			this->execute_composition_command(command);
+			++this->_carriage;
+			continue;
+		}
 
 		if (command.find(MOVE) != std::string::npos) {
 			this->execute_move_command(command);
@@ -87,13 +137,13 @@ void extended_register_machine::execute_all_commands() {
 		}
 
 		if (command.find(ASSIGNMENT) != std::string::npos) {
-			this->execute_assigment_command(command);
+			this->execute_assigment_instruction(command);
 			++this->_carriage;
 			continue;
 		}
 
 		if (command.find(IF) != std::string::npos) {
-			this->execute_condition_command(command);
+			this->execute_condition_instruction(command);
 			continue;
 		}
 
@@ -103,7 +153,7 @@ void extended_register_machine::execute_all_commands() {
 		}
 
 		if (command.find(STOP) != std::string::npos) { // РМ завершает свою работу только по достижению остановочной инструкции
-			this->execute_stop_command(command);
+			this->execute_stop_instruction(command);
 			break;
 		}
 	}
@@ -160,28 +210,49 @@ void basic_register_machine::print_output_registers() const {
 }
 
 // Проверка корректности условной инструкции
-bool basic_register_machine::is_valid_condition_command(const std::string& command) const {
+bool basic_register_machine::is_valid_condition_instruction(const std::string& command) const {
 	std::string pattern{ R"(^\s*if\s+(\w+)\s*==\s*0\s+then\s+goto\s+(\d+)\s+else\s+goto\s+(\d+)\s*$)" }; // TODO: не используются макросы
 	std::regex regex{ pattern };
 	return std::regex_match(command, regex);
 }
 
 // Проверка корректности условной инструкции
-bool extended_register_machine::is_valid_condition_command(const std::string& command) const {
+bool extended_register_machine::is_valid_condition_instruction(const std::string& command) const {
 	std::string pattern{ R"(^\s*if\s+(\w+)\s*==\s*(\w+|\d+)\s+then\s+goto\s+(\d+)\s+else\s+goto\s+(\d+)\s*$)" }; // TODO: не используются макросы
 	std::regex regex{ pattern };
 	return std::regex_match(command, regex);
 }
 
 // Проверка корректности инструкции присваивания
-bool basic_register_machine::is_valid_assignment_command(const std::string& command) const {
+bool basic_register_machine::is_valid_assignment_instruction(const std::string& command) const {
 	std::string pattern{ R"(^\s*(\w+)\s*<-\s*(?:(\d+)|\1\s*([+\-])\s*1|1\s*([+\-])\s*\1)\s*$)" };
 	std::regex regex{ pattern };
 	return std::regex_match(command, regex);
 }
 
+void extended_register_machine::execute_composition_command(const std::string& command) {
+	auto composition_position = command.find(COMPOSITION);
+	auto filename = command.substr(composition_position + COMPOSITION.length());
+
+	this->trim(filename);
+
+	if (filename.empty())
+		throw std::runtime_error("filename missing in call command");
+
+	extended_register_machine auxiliary_rm(filename);
+
+	auxiliary_rm.run();
+
+	for (size_t i{ 0 }; i < auxiliary_rm._output_registers.size(); ++i) {
+		const std::string& output_register = auxiliary_rm._output_registers[i];
+		const std::string& input_register = this->_input_registers[i];
+
+		this->_registers[input_register] = auxiliary_rm._registers.at(output_register);
+	}
+}
+
 // Проверка корректности условной инструкции
-bool extended_register_machine::is_valid_assignment_command(const std::string& command) const {
+bool extended_register_machine::is_valid_assignment_instruction(const std::string& command) const {
 	std::string pattern{ R"(^\s*(\w+)\s*<-\s*(?:(\d+)|(\w+)\s*([+\-])\s*(\d+|\w+)|(\d+|\w+)\s*([+\-])\s*(\w+)|(\w+))\s*$)" }; // TODO: не используются макросы
 	std::regex regex{ pattern };
 	return std::regex_match(command, regex);
@@ -189,7 +260,7 @@ bool extended_register_machine::is_valid_assignment_command(const std::string& c
 
 
 // Проверка корректности формата остановочной команды
-bool basic_register_machine::is_valid_stop_command(const std::string& command) const {
+bool basic_register_machine::is_valid_stop_instruction(const std::string& command) const {
 	std::string pattern{ R"(^stop$)" };  // TODO: не используются макросы
 	std::regex regex{ pattern };
 	return std::regex_match(command, regex);
@@ -200,6 +271,7 @@ void basic_register_machine::parse_input_arguments(const std::string& line) {
 	std::string variable;
 	std::istringstream iss(line);
 	while (iss >> variable) {
+		_input_registers.push_back(variable);
 		std::cout << "Введите значение для " << variable << ": ";
 		std::cin >> this->_registers[variable];
 	}
@@ -214,8 +286,8 @@ void basic_register_machine::parse_output_arguments(const std::string& line) {
 }
 
 // Выполнение инструкции присваивания
-void basic_register_machine::execute_assigment_command(const std::string& command) {
-	if (!this->is_valid_assignment_command(command))
+void basic_register_machine::execute_assigment_instruction(const std::string& command) {
+	if (!this->is_valid_assignment_instruction(command))
 		throw std::runtime_error("The assignment statement has an invalid format");
 
 	auto separator_position = command.find(ASSIGNMENT);
@@ -248,7 +320,7 @@ void basic_register_machine::execute_assigment_command(const std::string& comman
 		trim(left_operand);
 		trim(right_operand);
 
-		this->_registers[left_part] = std::max(0, this->get_value(left_operand) + this->get_value(right_operand));
+		this->_registers[left_part] = std::max(0, this->get_value(left_operand) - this->get_value(right_operand));
 
 		return;
 	}
@@ -259,14 +331,14 @@ void basic_register_machine::execute_assigment_command(const std::string& comman
 	return;
 }
 
-int basic_register_machine::get_value(const std::string& line) const {
+int basic_register_machine::get_value(const std::string& line) { // TODO: const модификатор
 	if (std::all_of(line.begin(), line.end(), ::isdigit)) return std::stoi(line);
-	if (this->is_variable(line)) return this->_registers.at(line);
+	if (this->is_variable(line)) return this->_registers[line];
 	throw std::runtime_error("");
 }
 
-void extended_register_machine::execute_assigment_command(const std::string& command) {
-	if (!this->is_valid_assignment_command(command))
+void extended_register_machine::execute_assigment_instruction(const std::string& command) {
+	if (!this->is_valid_assignment_instruction(command))
 		throw std::runtime_error("The assignment statement has an invalid format");
 
 	auto separator_position = command.find(ASSIGNMENT);
@@ -299,8 +371,7 @@ void extended_register_machine::execute_assigment_command(const std::string& com
 		trim(left_operand);
 		trim(right_operand);
 
-		if (left_operand == "1") this->_registers[left_part] = std::max(0, 1 - this->_registers[right_operand]);
-		else if (right_operand == "1") this->_registers[left_part] = std::max(0, this->_registers[left_operand] - 1);
+		this->_registers[left_part] = std::max(0, this->get_value(left_operand) - this->get_value(right_operand));
 
 		return;
 	}
@@ -311,8 +382,8 @@ void extended_register_machine::execute_assigment_command(const std::string& com
 }
 
 // Выполнение условной инструкции 
-void basic_register_machine::execute_condition_command(const std::string& command) {
-	if (!this->is_valid_condition_command(command))
+void basic_register_machine::execute_condition_instruction(const std::string& command) {
+	if (!this->is_valid_condition_instruction(command))
 		throw std::runtime_error("The conditional construct has an invalid format");
 
 	auto if_position = command.find(IF);
@@ -344,8 +415,8 @@ void basic_register_machine::execute_condition_command(const std::string& comman
 	else this->_carriage = std::stoi(false_L);
 }
 
-void extended_register_machine::execute_condition_command(const std::string& command) {
-	if (!this->is_valid_condition_command(command))
+void extended_register_machine::execute_condition_instruction(const std::string& command) {
+	if (!this->is_valid_condition_instruction(command))
 		throw std::runtime_error("The conditional construct has an invalid format");
 
 	auto if_position = command.find(IF);
@@ -382,8 +453,8 @@ void extended_register_machine::execute_condition_command(const std::string& com
 }
 
 // Выполнение остановочной инструкции
-void basic_register_machine::execute_stop_command(const std::string& command) {
-	if (!this->is_valid_stop_command(command))
+void basic_register_machine::execute_stop_instruction(const std::string& command) {
+	if (!this->is_valid_stop_instruction(command))
 		throw std::runtime_error("The stop instruction is in an invalid format");
 
 	this->_carriage = 0;
@@ -413,7 +484,7 @@ basic_register_machine& basic_register_machine::operator=(const basic_register_m
 	if (this != &other) {
 		this->_carriage = other._carriage;
 		this->_registers = other._registers;
-		this->_commands = other._commands;
+		this->_instructions = other._instructions;
 		this->_output_registers = other._output_registers;
 		this->_filename = other._filename;
 	}
@@ -424,7 +495,7 @@ basic_register_machine& basic_register_machine::operator=(const basic_register_m
 basic_register_machine& basic_register_machine::operator=(basic_register_machine&& other) noexcept {
 	this->_carriage = std::move(other._carriage);
 	this->_registers = std::move(other._registers);
-	this->_commands = std::move(other._commands);
+	this->_instructions = std::move(other._instructions);
 	this->_output_registers = std::move(other._output_registers);
 	this->_filename = std::move(other._filename);
 	return *this;

@@ -28,6 +28,7 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <Text Include="RM.txt" />
+    <Text Include="RM1.txt" />
+    <Text Include="RM2.txt" />
   </ItemGroup>
 </Project>
