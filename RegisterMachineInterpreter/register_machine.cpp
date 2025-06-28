@@ -8,6 +8,151 @@
 
 namespace IMD {
 
+	// Реализация инструкций
+
+	const std::string& instruction::description() const noexcept {
+		return this->_description;
+	}
+
+	void goto_instruction::execute() noexcept {
+		auto goto_position = this->_description.find(GOTO);
+		auto L = this->_description.substr(goto_position + GOTO.length());
+
+		trim(L);
+
+		this->_rm._carriage = std::stoi(L);
+	}
+
+	void move_instruction::execute() noexcept {
+		++this->_rm._carriage;
+
+		auto separator_position = this->_description.find(MOVE);
+		std::string left_part = this->_description.substr(0, separator_position);
+		std::string right_part = this->_description.substr(separator_position + MOVE.length());
+
+		trim(left_part);
+		trim(right_part);
+
+		if (!is_register(right_part) || !is_register(left_part))
+			throw std::runtime_error("");
+
+		this->_rm._registers[left_part] = this->_rm._registers[right_part];
+		this->_rm._registers[right_part] = 0;
+
+		return;
+	}
+
+	void assigment_instruction::execute() noexcept {
+
+		++this->_rm._carriage;
+
+		auto separator_position = this->_description.find(ASSIGNMENT);
+		std::string left_part = this->_description.substr(0, separator_position);
+		std::string right_part = this->_description.substr(separator_position + ASSIGNMENT.length());
+
+		trim(left_part);
+		trim(right_part);
+
+		// TODO: использование substr плохо
+
+		// Обработка инструкции инкремента
+		auto operation = right_part.find(PLUS);
+		if (operation != std::string::npos) {
+			std::string left_operand = right_part.substr(0, operation);
+			std::string right_operand = right_part.substr(operation + PLUS.length());
+
+			trim(left_operand);
+			trim(right_operand);
+
+			this->_rm._registers[left_part] = this->_rm.get_value(left_operand) + this->_rm.get_value(right_operand);
+
+			return;
+		}
+
+		// Обработка инструкции декремента
+		operation = right_part.find(MINUS);
+		if (operation != std::string::npos) {
+			std::string left_operand = right_part.substr(0, operation);
+			std::string right_operand = right_part.substr(operation + MINUS.length());
+
+			trim(left_operand);
+			trim(right_operand);
+
+			this->_rm._registers[left_part] = std::max(0, this->_rm.get_value(left_operand) - this->_rm.get_value(right_operand));
+
+			return;
+		}
+
+		// Обработка инструкции присваивания (копирования)
+		this->_rm._registers[left_part] = this->_rm.get_value(right_part);
+
+		return;
+	}
+
+	void condition_instruction::execute() noexcept {
+		auto if_position = this->_description.find(IF);
+		auto then_position = this->_description.find(THEN);
+		auto else_position = this->_description.find(ELSE);
+		auto goto1_position = this->_description.find(GOTO, if_position);
+		auto goto2_position = this->_description.find(GOTO, else_position);
+
+		std::string condition = this->_description.substr(if_position + IF.length(), then_position - if_position - std::string(IF).length());
+		std::string true_L = this->_description.substr(goto1_position + GOTO.length(), else_position - goto1_position - std::string(GOTO).length());
+		std::string false_L = this->_description.substr(goto2_position + GOTO.length());
+
+		trim(condition);
+		trim(true_L);
+		trim(false_L);
+
+		auto equal_position = condition.find(EQUAL);
+
+		std::string left_part = condition.substr(0, equal_position);
+		std::string right_part = condition.substr(equal_position + EQUAL.length());
+
+		trim(left_part);
+		trim(right_part);
+
+		if (this->_rm._registers[left_part] == 0) this->_rm._carriage = std::stoi(true_L);
+		else this->_rm._carriage = std::stoi(false_L);
+	}
+
+	void stop_instruction::execute() noexcept {
+		this->_rm._is_stopped = true;
+	}
+
+	void extended_condition_instruction::execute() noexcept {
+		auto if_position = this->_description.find(IF);
+		auto then_position = this->_description.find(THEN);
+		auto else_position = this->_description.find(ELSE);
+		auto goto1_position = this->_description.find(GOTO, if_position);
+		auto goto2_position = this->_description.find(GOTO, else_position);
+
+		std::string condition = this->_description.substr(if_position + IF.length(), then_position - if_position - std::string(IF).length());
+		std::string true_L = this->_description.substr(goto1_position + GOTO.length(), else_position - goto1_position - std::string(GOTO).length());
+		std::string false_L = this->_description.substr(goto2_position + GOTO.length());
+
+		trim(condition);
+		trim(true_L);
+		trim(false_L);
+
+		auto equal_position = condition.find(EQUAL);
+
+		std::string left_part = condition.substr(0, equal_position);
+		std::string right_part = condition.substr(equal_position + EQUAL.length());
+
+		trim(left_part);
+		trim(right_part);
+
+		if (is_register(right_part)) {
+			if (this->_rm._registers[left_part] == this->_rm._registers[right_part]) this->_rm._carriage = std::stoi(true_L);
+			else this->_rm._carriage = std::stoi(false_L);
+		}
+		else {
+			if (this->_rm._registers[left_part] == std::stoi(right_part)) this->_rm._carriage = std::stoi(true_L);
+			else this->_rm._carriage = std::stoi(false_L);
+		}
+	}
+
 	// Реализация вспомогательных методов
 
 	// Удаление лишних пробелов слева и справа от строки
@@ -34,29 +179,7 @@ namespace IMD {
 	// Реализация базовой РМ
 
 	// Конструктор
-	basic_register_machine::basic_register_machine(const std::string& filename, bool is_verbose) noexcept : _filename(filename), _is_verbose(is_verbose), _carriage(0), _registers(), _instructions(), _output_registers() {}
-	// Оператор присваивания
-	basic_register_machine& basic_register_machine::operator=(const basic_register_machine& other) noexcept {
-		if (this != &other) { // Проверка на самоприсваивание
-			this->_carriage = other._carriage;
-			this->_registers = other._registers;
-			this->_instructions = other._instructions;
-			this->_output_registers = other._output_registers;
-			this->_filename = other._filename;
-			this->_is_verbose = other._is_verbose;
-		}
-		return *this;
-	}
-	// Оператор move-присваивания
-	basic_register_machine& basic_register_machine::operator=(basic_register_machine&& other) noexcept {
-		this->_carriage = std::move(other._carriage);
-		this->_registers = std::move(other._registers);
-		this->_instructions = std::move(other._instructions);
-		this->_output_registers = std::move(other._output_registers);
-		this->_filename = std::move(other._filename);
-		this->_is_verbose = std::move(other._is_verbose);
-		return *this;
-	}
+	basic_register_machine::basic_register_machine(const std::string& filename, bool is_verbose) noexcept : _filename(filename), _is_verbose(is_verbose), _carriage(0), _registers(), _instructions(), _output_registers(), _is_stopped(false) {}
 
 	// Запуск РМ
 	void basic_register_machine::run() {
@@ -79,6 +202,7 @@ namespace IMD {
 		this->_output_registers.resize(0);
 		this->_input_registers.resize(0);
 		this->_filename = ""s;
+		this->_is_stopped = false;
 	}
 
 	// Печать входных регистров без перехода на новую строку
@@ -150,11 +274,23 @@ namespace IMD {
 			trim(instruction);
 			trim(number);
 
-			if (std::stoi(number) != expected_number) // Проверка на последовательную нумерацию меток
-				throw std::invalid_argument("Filename: " + this->_filename + ", The instructions are not written in sequence");
+			if (std::stoi(number) != expected_number)
+				throw std::invalid_argument("Filename: " + this->_filename + ", the instructions are not written in sequence");
 
-			this->_instructions.push_back(instruction);
-			++expected_number;
+			if (this->is_valid_assignment_instruction(instruction)) {
+				++expected_number;
+				this->_instructions.push_back(std::make_unique<assigment_instruction>(instruction, *this));
+			}
+			else if (this->is_valid_condition_instruction(instruction)) {
+				this->_instructions.push_back(std::make_unique<condition_instruction>(instruction, *this));
+				++expected_number;
+			}
+				
+			else if (this->is_valid_stop_instruction(instruction)) {
+				this->_instructions.push_back(std::make_unique<stop_instruction>(instruction, *this));
+				++expected_number;
+			}
+			else throw std::invalid_argument("Filename: " + this->_filename + ", " + instruction + " isn't correct");
 		}
 
 		// В последней строке описываются выходные регистры
@@ -167,34 +303,16 @@ namespace IMD {
 
 	// Выполнение всех инструкций
 	void basic_register_machine::execute_all_instructions() {
-		while (true) {
+		while (!this->_is_stopped) {
 			const auto& current_instruction = this->_instructions[this->_carriage];
 
 			// Вывод текущего состояния РМ
 			if (this->_is_verbose) {
 				this->println_all_registers();
-				std::cout << this->_carriage << ": " << current_instruction << std::endl;
+				std::cout << this->_carriage << ": " << current_instruction->description() << std::endl;
 			}
 
-			// Определение типа инструкции
-
-			if (current_instruction.find(ASSIGNMENT) != std::string::npos) {
-				this->execute_assigment_instruction(current_instruction);
-				++this->_carriage;
-				continue;
-			}
-
-			if (current_instruction.find(IF) != std::string::npos) {
-				this->execute_condition_instruction(current_instruction);
-				continue;
-			}
-
-			if (current_instruction.find(STOP) != std::string::npos) { // РМ завершает свою работу только по достижению остановочной инструкции
-				this->execute_stop_instruction(current_instruction);
-				break;
-			}
-
-			throw std::runtime_error("Filename: " + this->_filename + ", The label contains an unknown instruction");
+			current_instruction->execute();
 		}
 	}
 
@@ -232,96 +350,6 @@ namespace IMD {
 		return std::regex_match(instruction, regex);
 	}
 
-
-	// Выполнение инструкции присваивания
-	void basic_register_machine::execute_assigment_instruction(const std::string& command) {
-		if (!this->is_valid_assignment_instruction(command))
-			throw std::runtime_error("Filename: " + this->_filename + ", the assignment statement has an invalid format");
-
-		auto separator_position = command.find(ASSIGNMENT);
-		std::string left_part = command.substr(0, separator_position);
-		std::string right_part = command.substr(separator_position + ASSIGNMENT.length());
-
-		trim(left_part);
-		trim(right_part);
-
-		// TODO: использование substr плохо
-
-		// Обработка инструкции инкремента
-		auto operation = right_part.find(PLUS);
-		if (operation != std::string::npos) {
-			std::string left_operand = right_part.substr(0, operation);
-			std::string right_operand = right_part.substr(operation + PLUS.length());
-
-			trim(left_operand);
-			trim(right_operand);
-
-			this->_registers[left_part] = this->get_value(left_operand) + this->get_value(right_operand);
-
-			return;
-		}
-
-		// Обработка инструкции декремента
-		operation = right_part.find(MINUS);
-		if (operation != std::string::npos) {
-			std::string left_operand = right_part.substr(0, operation);
-			std::string right_operand = right_part.substr(operation + MINUS.length());
-
-			trim(left_operand);
-			trim(right_operand);
-
-			this->_registers[left_part] = std::max(0, this->get_value(left_operand) - this->get_value(right_operand));
-
-			return;
-		}
-
-		// Обработка инструкции присваивания (копирования)
-		this->_registers[left_part] = this->get_value(right_part);
-
-		return;
-	}
-
-	// Выполнение условной инструкции 
-	void basic_register_machine::execute_condition_instruction(const std::string& command) {
-		if (!this->is_valid_condition_instruction(command))
-			throw std::runtime_error("Filename: " + this->_filename + ", the conditional construct has an invalid format");
-
-		auto if_position = command.find(IF);
-		auto then_position = command.find(THEN);
-		auto else_position = command.find(ELSE);
-		auto goto1_position = command.find(GOTO, if_position);
-		auto goto2_position = command.find(GOTO, else_position);
-
-		std::string condition = command.substr(if_position + IF.length(), then_position - if_position - std::string(IF).length());
-		std::string true_L = command.substr(goto1_position + GOTO.length(), else_position - goto1_position - std::string(GOTO).length());
-		std::string false_L = command.substr(goto2_position + GOTO.length());
-
-		trim(condition);
-		trim(true_L);
-		trim(false_L);
-
-		auto equal_position = condition.find(EQUAL);
-
-		std::string left_part = condition.substr(0, equal_position);
-		std::string right_part = condition.substr(equal_position + EQUAL.length());
-
-		trim(left_part);
-		trim(right_part);
-
-		if (right_part != "0") throw std::invalid_argument(""); //TODO: остальные проверки
-
-		if (this->_registers[left_part] == 0) this->_carriage = std::stoi(true_L);
-		else this->_carriage = std::stoi(false_L);
-	}
-
-	// Выполнение остановочной инструкции
-	void basic_register_machine::execute_stop_instruction(const std::string& command) {
-		if (!this->is_valid_stop_instruction(command))
-			throw std::runtime_error("Filename: " + this->_filename + ", the stop instruction is in an invalid format");
-
-		this->_carriage = 0;
-	}
-
 	// Парсинг входных регистров
 	void basic_register_machine::parse_input_registers(const std::string& line) {
 		if (!this->is_valid_input_registers_line(line))
@@ -337,6 +365,7 @@ namespace IMD {
 	void basic_register_machine::parse_output_registers(const std::string& line) {
 		if (!this->is_valid_output_registers_line(line))
 			throw std::runtime_error("Filename: " + this->_filename + ", the line does not contain output registers");
+
 		std::string variable;
 		std::istringstream iss(line);
 		while (iss >> variable)
@@ -354,21 +383,6 @@ namespace IMD {
 
 	// Конструктор
 	extended_register_machine::extended_register_machine(const std::string& filename, bool is_verbose) noexcept : basic_register_machine(filename, is_verbose), _file_stack() {}
-
-	// Оператор присваивания
-	extended_register_machine& extended_register_machine::operator=(const extended_register_machine& other) noexcept {
-		if (this != &other) { // Проверка на самоприсваивание
-			basic_register_machine::operator=(other);
-			_file_stack = other._file_stack;
-		}
-		return *this;
-	}
-	// Move-оператор присваивания
-	extended_register_machine& extended_register_machine::operator=(extended_register_machine&& other) noexcept {
-		basic_register_machine::operator=(other);
-		_file_stack = std::move(other._file_stack);
-		return *this;
-	}
 
 	// Запуск РМ
 	void extended_register_machine::run() {
@@ -402,8 +416,6 @@ namespace IMD {
 						std::cin >> this->_registers[x];
 					}
 				}
-
-				std::cout << this->_filename << std::endl;
 
 				this->execute_all_instructions(); // Выполнение верхнего файла
 			}
@@ -442,8 +454,28 @@ namespace IMD {
 			if (std::stoi(number) != expected_number)
 				throw std::invalid_argument("Filename: " + this->_filename + ", the instructions are not written in sequence");
 
-			this->_instructions.push_back(instruction);
-			++expected_number;
+			if (this->is_valid_assignment_instruction(instruction)) {
+				++expected_number;
+				this->_instructions.push_back(std::make_unique<assigment_instruction>(instruction, *this));
+			}
+			else if (this->is_valid_condition_instruction(instruction)) {
+				this->_instructions.push_back(std::make_unique<extended_condition_instruction>(instruction, *this));
+				++expected_number;
+			}
+
+			else if (this->is_valid_stop_instruction(instruction)) {
+				this->_instructions.push_back(std::make_unique<stop_instruction>(instruction, *this));
+				++expected_number;
+			}
+			else if (this->is_valid_goto_instruction(instruction)) {
+				this->_instructions.push_back(std::make_unique<goto_instruction>(instruction, *this));
+				++expected_number;
+			}
+			else if (this->is_valid_move_instruction(instruction)) {
+				this->_instructions.push_back(std::make_unique<move_instruction>(instruction, *this));
+				++expected_number;
+			}
+			else throw std::invalid_argument("Filename: " + this->_filename + ", " + instruction + " isn't correct");
 		}
 
 		// В последней строке описываются выходные регистры
@@ -457,162 +489,18 @@ namespace IMD {
 	// Выполнение всех команд
 	void extended_register_machine::execute_all_instructions() {
 
-		while (true) {
+		while (!this->_is_stopped) {
 			const auto& current_instruction = this->_instructions[this->_carriage];
 
 			// Вывод текущего состояния РМ
 			if (this->_is_verbose) {
 				this->println_all_registers(" ");
-				std::cout << this->_carriage << ": " << current_instruction << std::endl;
+				std::cout << this->_carriage << ": " << current_instruction->description() << std::endl;
 			}
 
-			// Определение типа инструкции
-			if (current_instruction.find(MOVE) != std::string::npos) {
-				this->execute_move_instruction(current_instruction);
-				++this->_carriage;
-				continue;
-			}
-
-			if (current_instruction.find(ASSIGNMENT) != std::string::npos) {
-				this->execute_assigment_instruction(current_instruction);
-				++this->_carriage;
-				continue;
-			}
-
-			if (current_instruction.find(IF) != std::string::npos) {
-				this->execute_condition_instruction(current_instruction);
-				continue;
-			}
-
-			if (current_instruction.find(GOTO) != std::string::npos) {
-				this->execute_goto_instruction(current_instruction);
-				continue;
-			}
-
-			if (current_instruction.find(STOP) != std::string::npos) { // РМ завершает свою работу только по достижению остановочной инструкции
-				this->execute_stop_instruction(current_instruction);
-				break;
-			}
-
-			throw std::runtime_error("Filename: " + this->_filename + ", the label contains an unknown instruction");
+			this->_instructions[this->_carriage]->execute();
 		}
 	}
-
-	void extended_register_machine::execute_assigment_instruction(const std::string& command) {
-		if (!this->is_valid_assignment_instruction(command))
-			throw std::runtime_error("Filename: " + this->_filename + ", the assignment statement has an invalid format");
-
-		auto separator_position = command.find(ASSIGNMENT);
-		std::string left_part = command.substr(0, separator_position);
-		std::string right_part = command.substr(separator_position + ASSIGNMENT.length());
-
-		trim(left_part);
-		trim(right_part);
-
-		// Обработка инструкции инкремента
-		auto operation = right_part.find(PLUS);
-		if (operation != std::string::npos) {
-			std::string left_operand = right_part.substr(0, operation);
-			std::string right_operand = right_part.substr(operation + PLUS.length());
-
-			trim(left_operand);
-			trim(right_operand);
-
-			this->_registers[left_part] = this->get_value(left_operand) + this->get_value(right_operand);
-
-			return;
-		}
-
-		// Обработка инструкции декремента
-		operation = right_part.find(MINUS);
-		if (operation != std::string::npos) {
-			std::string left_operand = right_part.substr(0, operation);
-			std::string right_operand = right_part.substr(operation + MINUS.length());
-
-			trim(left_operand);
-			trim(right_operand);
-
-			this->_registers[left_part] = std::max(0, this->get_value(left_operand) - this->get_value(right_operand));
-
-			return;
-		}
-
-		// Обработка инструкции присваивания (копированиия)
-		this->_registers[left_part] = this->get_value(right_part);
-
-		return;
-	}
-
-	void extended_register_machine::execute_condition_instruction(const std::string& command) {
-		if (!this->is_valid_condition_instruction(command))
-			throw std::runtime_error("Filename: " + this->_filename + ", the conditional construct has an invalid format");
-
-		auto if_position = command.find(IF);
-		auto then_position = command.find(THEN);
-		auto else_position = command.find(ELSE);
-		auto goto1_position = command.find(GOTO, if_position);
-		auto goto2_position = command.find(GOTO, else_position);
-
-		std::string condition = command.substr(if_position + IF.length(), then_position - if_position - std::string(IF).length());
-		std::string true_L = command.substr(goto1_position + GOTO.length(), else_position - goto1_position - std::string(GOTO).length());
-		std::string false_L = command.substr(goto2_position + GOTO.length());
-
-		trim(condition);
-		trim(true_L);
-		trim(false_L);
-
-		auto equal_position = condition.find(EQUAL);
-
-		std::string left_part = condition.substr(0, equal_position);
-		std::string right_part = condition.substr(equal_position + EQUAL.length());
-
-		trim(left_part);
-		trim(right_part);
-
-		if (is_register(right_part)) {
-			if (this->_registers[left_part] == this->_registers[right_part]) this->_carriage = std::stoi(true_L);
-			else this->_carriage = std::stoi(false_L);
-		}
-		else {
-			if (this->_registers[left_part] == std::stoi(right_part)) this->_carriage = std::stoi(true_L);
-			else this->_carriage = std::stoi(false_L);
-		}
-	}
-
-
-	// Выполнение инструкции перемещения
-	void extended_register_machine::execute_move_instruction(const std::string& command) {
-		if (!this->is_valid_move_instruction(command))
-			throw std::runtime_error("Filename: " + this->_filename + ", the assignment statement has an invalid format");
-
-		auto separator_position = command.find(MOVE);
-		std::string left_part = command.substr(0, separator_position);
-		std::string right_part = command.substr(separator_position + MOVE.length());
-
-		trim(left_part);
-		trim(right_part);
-
-		if (!is_register(right_part) || !is_register(left_part))
-			throw std::runtime_error("");
-
-		this->_registers[left_part] = this->_registers[right_part];
-		this->_registers[right_part] = 0;
-
-		return;
-	}
-
-	// Выполнение инструкции передвижения
-	void extended_register_machine::execute_goto_instruction(const std::string& command) {
-		if (!is_valid_goto_instruction(command))
-			throw std::runtime_error("Filename: " + this->_filename + ", the goto statement has an invalid format");
-
-		auto goto_position = command.find(GOTO);
-		auto L = command.substr(goto_position + GOTO.length());
-
-		trim(L);
-		this->_carriage = std::stoi(L);
-	}
-
 	// Проверка корректности формата условной инструкции
 	bool extended_register_machine::is_valid_condition_instruction(const std::string& command) const noexcept {
 		std::string pattern{ R"(^\s*if\s+(\w+)\s*==\s*(\w+|\d+)\s+then\s+goto\s+(\d+)\s+else\s+goto\s+(\d+)\s*$)" }; // TODO: не используются макросы

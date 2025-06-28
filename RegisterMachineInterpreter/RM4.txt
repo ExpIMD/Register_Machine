@@ -1,6 +1,4 @@
 x y
-0: x <- x + 3
-1: y <- y + 3
-2: z <- x + y
-3: stop
-z
+0: x <<- y
+1: stop
+x y

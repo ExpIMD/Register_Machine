@@ -26,6 +26,8 @@ using namespace std::string_literals;
 #define COMPOSITION "call"s
 
 namespace IMD {
+	
+	class basic_register_machine;
 
 	// Удаление лишних пробелов слева и справа от строки
 	void trim(std::string& line);
@@ -33,9 +35,68 @@ namespace IMD {
 	// Проверка, что в строке записан регистр
 	bool is_register(const std::string& line) noexcept;
 
+	// Класс инструкции
+	class instruction {
+	protected:
+		std::string _description;
+		basic_register_machine& _rm;
+	public:
+		instruction(const std::string& description, basic_register_machine& rm) : _description(description), _rm(rm) {}
+		virtual ~instruction() = default;
+		const std::string& description() const noexcept;
+		virtual void execute() noexcept = 0;
+	};
+
+	// Класс инструкции присваивания
+	class assigment_instruction : public instruction {
+	public:
+		assigment_instruction(const std::string& description, basic_register_machine& rm) : instruction(description, rm) {}
+		void execute() noexcept override;
+
+	};
+
+	class condition_instruction : public instruction {
+	public:
+		condition_instruction(const std::string& description, basic_register_machine& rm) : instruction(description, rm) {}
+		void execute() noexcept override;
+	};
+
+	class stop_instruction : public instruction {
+	public:
+		stop_instruction(const std::string& description, basic_register_machine& rm) : instruction(description, rm) {}
+		void execute() noexcept override;
+	};
+
+	class extended_condition_instruction : public condition_instruction {
+	public:
+		extended_condition_instruction(const std::string& description, basic_register_machine& rm) : condition_instruction(description, rm) {}
+		void execute() noexcept override;
+	};
+
+	class goto_instruction : public instruction {
+	public:
+		goto_instruction(const std::string& description, basic_register_machine& rm) : instruction(description, rm) {}
+		void execute() noexcept override;
+	};
+
+	class move_instruction : public instruction {
+	public:
+		move_instruction(const std::string& description, basic_register_machine& rm) : instruction(description, rm) {}
+		void execute() noexcept override;
+	};
+
 	// Класс базовой РМ
 	class basic_register_machine {
+		friend class assigment_instruction;
+		friend class condition_instruction;
+		friend class stop_instruction;
+		friend class goto_instruction;
+		friend class extended_condition_instruction;
+		friend class move_instruction;
 	protected:
+		// Флаг, указывающий остановлена ли РМ
+		bool _is_stopped;
+
 		// Каретка, описывающая номер текущей инструкции
 		size_t _carriage;
 
@@ -43,7 +104,7 @@ namespace IMD {
 		std::unordered_map<std::string, int> _registers;
 
 		// Вектор инструкций
-		std::vector<std::string> _instructions;
+		std::vector<std::unique_ptr<instruction>> _instructions;
 
 		// Вектор выходных регистров
 		std::vector<std::string> _output_registers;
@@ -61,13 +122,11 @@ namespace IMD {
 		// Конструктор
 		basic_register_machine(const std::string& filename, bool is_verbose = false) noexcept;
 
+		basic_register_machine(const basic_register_machine&) = delete;
+		basic_register_machine& operator=(const basic_register_machine&) = delete;
+
 		// Деструктор
 		virtual ~basic_register_machine() = default;
-
-		// Оператор присваивания
-		basic_register_machine& operator=(const basic_register_machine& other) noexcept;
-		// Move-оператор присваивания
-		basic_register_machine& operator=(basic_register_machine&& other) noexcept;
 
 		// Запуск РМ
 		virtual void run();
@@ -111,13 +170,6 @@ namespace IMD {
 		// Проверка корректности формата строки с выходными регистрами
 		virtual bool is_valid_output_registers_line(const std::string& instruction) const noexcept;
 
-		// Выполнение инструкции присваивания
-		virtual void execute_assigment_instruction(const std::string& instruction);
-		// Выполнение условной инструкции
-		virtual void execute_condition_instruction(const std::string& instruction);
-		// Выполнение остановочной инструкции
-		virtual void execute_stop_instruction(const std::string& instruction);
-
 		// Парсинг аргументов
 		void parse_input_registers(const std::string& line);
 		// Парсинг результатов (выходных регистров)
@@ -129,6 +181,10 @@ namespace IMD {
 
 	// Класс расширенной РМ
 	class extended_register_machine : public basic_register_machine {
+		friend class assigment_instruction;
+		friend class condition_instruction;
+		friend class stop_instruction;
+		friend class expended_condition_instruction;
 	protected:
 		// Стек для управления порядком обработки файлов РМ: пара <имя файла, флаг обработки всех COMPOSITION>
 		std::stack<std::pair<std::string, bool>> _file_stack;
@@ -137,13 +193,12 @@ namespace IMD {
 		// Конструктор
 		extended_register_machine(const std::string& filename, bool is_verbose = false) noexcept;
 
+		extended_register_machine(const extended_register_machine&) = delete;
+		extended_register_machine& operator=(const extended_register_machine&) = delete;
+
 		// Деструктор
 		~extended_register_machine() = default;
 
-		// Оператор присваивания
-		extended_register_machine& operator=(const extended_register_machine& other) noexcept;
-		// Move-оператор присваивания
-		extended_register_machine& operator=(extended_register_machine&& other) noexcept;
 
 		// Запуск РМ
 		void run() override;
@@ -154,16 +209,6 @@ namespace IMD {
 
 		// Выполнение всех инструкций
 		void execute_all_instructions() override;
-		
-		// Выполнение инструкции присваивания
-		void execute_assigment_instruction(const std::string& command) override;
-		// Выполнение условной инструкции
-		void execute_condition_instruction(const std::string& command) override;
-
-		// Выполнение инструкции перемещения
-		void execute_move_instruction(const std::string& command);
-		// Выполнение инструкции передвижения
-		void execute_goto_instruction(const std::string& command);
 
 		// Проверка корректности формата условной инструкции
 		bool is_valid_condition_instruction(const std::string& instruction) const noexcept override;
