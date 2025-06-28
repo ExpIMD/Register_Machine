@@ -24,10 +24,9 @@ using namespace std::string_literals;
 #define EQUAL "=="s
 #define RESET "reset"s
 #define COMPOSITION "call"s
+#define COMMENT "#"s
 
 namespace IMD {
-
-	class basic_register_machine;
 
 	// Удаление лишних пробелов слева и справа от строки
 	void trim(std::string& line);
@@ -254,6 +253,8 @@ namespace IMD {
 		bool is_valid_move_instruction(const std::string& instruction) const noexcept;
 		// Проверка корректности формата инструкции передвижения
 		bool is_valid_goto_instruction(const std::string& instruction) const noexcept;
+		// Проверка корректности формата команды композицииэ
+		bool is_valid_composition_command(const std::string& command) const noexcept;
 
 		// Обработка всех команд композиции в текущем файла и добавление включаемых файлов в стек
 		void _include_files(const std::string& filename);

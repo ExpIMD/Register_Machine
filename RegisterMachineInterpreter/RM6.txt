@@ -1,5 +1,0 @@
-call RM5.txt
-k y
-0: k <- k - 1
-1: stop
-k

@@ -32,11 +32,5 @@
     <Text Include="RM2.txt" />
     <Text Include="RM3.txt" />
     <Text Include="RM4.txt" />
-    <Text Include="RM5.txt">
-      <Filter>Файлы заголовков</Filter>
-    </Text>
-    <Text Include="RM6.txt">
-      <Filter>Файлы заголовков</Filter>
-    </Text>
   </ItemGroup>
 </Project>

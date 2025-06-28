@@ -8,6 +8,40 @@
 
 namespace IMD {
 
+
+	// Реализация вспомогательных методов
+
+	// Удаление лишних пробелов слева и справа от строки
+	void trim(std::string& line) {
+		line.erase(0, line.find_first_not_of(" \t\r\n"));
+		if (line.empty()) return;
+		line.erase(line.find_last_not_of(" \t\r\n") + 1);
+	}
+
+	// Проверка, что в строке записан регистр
+	bool is_register(const std::string& line) noexcept {
+		if (line.empty())
+			return false;
+
+		if (!std::isalpha(line[0]))
+			return false; // Первый символ регистра должен быть буквой
+
+		for (size_t i{ 1 }; i < line.size(); ++i) // Остальные символы регистра могут быть буквами или цифрами
+			if (!std::isalnum(line[i]))
+				return false;
+
+		return true;
+	}
+
+	// Удаляет комменатрии в строке
+	void remove_comment(std::string& line) {
+		auto pos = line.find(COMMENT);
+		if (pos != std::string::npos) {
+			line.erase(pos);
+		}
+		trim(line);
+	}
+
 	// Реализация инструкций
 
 	// Конструктор
@@ -97,14 +131,14 @@ namespace IMD {
 		else this->_rm._carriage = std::stoi(false_L);
 	}
 	// Конструктор
-	basic_register_machine::stop_instruction::stop_instruction(const std::string& description, basic_register_machine& rm) noexcept: instruction(description, rm) {}
+	basic_register_machine::stop_instruction::stop_instruction(const std::string& description, basic_register_machine& rm) noexcept : instruction(description, rm) {}
 	// Выполнение остановочной инструкции
 	void basic_register_machine::stop_instruction::execute() noexcept {
 		this->_rm._is_stopped = true;
 	}
 
 	// Конструктор
-	basic_register_machine::extended_condition_instruction::extended_condition_instruction(const std::string& description, basic_register_machine& rm) noexcept: condition_instruction(description, rm) {}
+	basic_register_machine::extended_condition_instruction::extended_condition_instruction(const std::string& description, basic_register_machine& rm) noexcept : condition_instruction(description, rm) {}
 	// Выполнение расширенной условной инструкции
 	void basic_register_machine::extended_condition_instruction::execute() noexcept {
 		auto if_position = this->_description.find(IF);
@@ -171,29 +205,6 @@ namespace IMD {
 		this->_rm._registers[right_part] = 0;
 
 		return;
-	}
-
-	// Реализация вспомогательных методов
-
-	// Удаление лишних пробелов слева и справа от строки
-	void trim(std::string& line) {
-		line.erase(0, line.find_first_not_of(" \t\r\n"));
-		if (line.empty()) return;
-		line.erase(line.find_last_not_of(" \t\r\n") + 1);
-	}
-
-	bool is_register(const std::string& line) noexcept {
-		if (line.empty())
-			return false;
-
-		if (!std::isalpha(line[0]))
-			return false; // Первый символ регистра должен быть буквой
-
-		for (size_t i{ 1 }; i < line.size(); ++i) // Остальные символы регистра могут быть буквами или цифрами
-			if (!std::isalnum(line[i]))
-				return false;
-
-		return true;
 	}
 
 	// Реализация базовой РМ
@@ -278,12 +289,17 @@ namespace IMD {
 
 		// Первая строка содержит аргументы, разделённые пробелами
 		if (std::getline(ifs, line)) {
+			remove_comment(line);
 			this->parse_input_registers(line);
 		}
 
 		// Последующие строки, за исключением последней, содержат метки
 		size_t expected_number{ 0 }; // Ожидаемый номер метки
 		while (std::getline(ifs, line)) {
+
+			remove_comment(line);
+			if (line.empty()) continue;
+
 			auto separator_position = line.find(SEPARATOR);
 			if (separator_position == std::string::npos)
 				break;
@@ -294,7 +310,7 @@ namespace IMD {
 			trim(instruction);
 			trim(number);
 
-			if (std::stoi(number) != expected_number)
+			if (number.empty() || std::stoi(number) != expected_number)
 				throw std::invalid_argument("Filename: " + this->_filename + ", the instructions are not written in sequence");
 
 			if (this->is_valid_assignment_instruction(instruction)) {
@@ -305,7 +321,7 @@ namespace IMD {
 				this->_instructions.push_back(std::make_unique<condition_instruction>(instruction, *this));
 				++expected_number;
 			}
-				
+
 			else if (this->is_valid_stop_instruction(instruction)) {
 				this->_instructions.push_back(std::make_unique<stop_instruction>(instruction, *this));
 				++expected_number;
@@ -317,8 +333,11 @@ namespace IMD {
 		this->parse_output_registers(line);
 
 		// Проверка, что после выходных аргументов ничего нет
-		if (std::getline(ifs, line))
-			throw std::invalid_argument("Filename: " + this->_filename + ", unexpected data after output registers");
+		while (std::getline(ifs, line)) {
+			remove_comment(line);
+			if (!line.empty())
+				throw std::invalid_argument("Filename: " + this->_filename + ", unexpected data after output registers");
+		}
 	}
 
 	// Выполнение всех инструкций
@@ -462,7 +481,14 @@ namespace IMD {
 			throw std::runtime_error("Filename: " + this->_filename + ", error processing file");
 
 
-		while (std::getline(ifs, line) && line.find(COMPOSITION) != std::string::npos); // Команда композиции не является инструкцией, поэтому пропускаем её
+		while (std::getline(ifs, line)) {// Команда композиции не является инструкцией, поэтому пропускаем её
+			remove_comment(line);
+
+			if (this->is_valid_input_registers_line(line)) break;
+			if (!this->is_valid_composition_command(line))
+				throw std::runtime_error("The call instruction is error");
+		}
+
 
 		// Обработка входных регистров
 		this->parse_input_registers(line);
@@ -471,6 +497,9 @@ namespace IMD {
 
 		size_t expected_number{ 0 };
 		while (std::getline(ifs, line)) {
+			remove_comment(line);
+			if (line.empty()) continue;
+
 			auto separator_position = line.find(SEPARATOR);
 			if (separator_position == std::string::npos)
 				break;
@@ -481,7 +510,7 @@ namespace IMD {
 			trim(instruction);
 			trim(number);
 
-			if (std::stoi(number) != expected_number)
+			if (number.empty() || std::stoi(number) != expected_number)
 				throw std::invalid_argument("Filename: " + this->_filename + ", the instructions are not written in sequence");
 
 			if (this->is_valid_assignment_instruction(instruction)) {
@@ -512,8 +541,11 @@ namespace IMD {
 		this->parse_output_registers(line);
 
 		// Проверка, что после выходных аргументов ничего нет
-		if (std::getline(ifs, line))
-			throw std::invalid_argument("Filename: " + this->_filename + ", unexpected data after output registers");
+		while (std::getline(ifs, line)) {
+			remove_comment(line);
+			if (!line.empty())
+				throw std::invalid_argument("Filename: " + this->_filename + ", unexpected data after output registers");
+		}
 	}
 
 	// Выполнение всех команд
@@ -557,6 +589,13 @@ namespace IMD {
 		std::regex regex{ pattern };
 		return std::regex_match(command, regex);
 	}
+	// Проверка корректности формата команды композиции
+	bool extended_register_machine::is_valid_composition_command(const std::string& command) const noexcept {
+		std::string pattern{ R"(^\s*)"s + COMPOSITION + R"(\s+([\w.\-]+)\s*$)" };
+		std::regex regex{ pattern };
+		return std::regex_match(command, regex);
+	}
+
 
 	// Обработка всех команд композиции в текущем файла и добавление включаемых файлов в стек
 	void extended_register_machine::_include_files(const std::string& filename) {
@@ -567,6 +606,8 @@ namespace IMD {
 		_file_stack.push({ filename, true });
 
 		while (std::getline(ifs, line)) {
+			remove_comment(line);
+
 			auto composition_position = line.find(COMPOSITION);
 			if (composition_position == std::string::npos) break;
 
