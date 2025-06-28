@@ -26,7 +26,7 @@ using namespace std::string_literals;
 #define COMPOSITION "call"s
 
 namespace IMD {
-	
+
 	class basic_register_machine;
 
 	// Удаление лишних пробелов слева и справа от строки
@@ -35,64 +35,99 @@ namespace IMD {
 	// Проверка, что в строке записан регистр
 	bool is_register(const std::string& line) noexcept;
 
-	// Класс инструкции
-	class instruction {
-	protected:
-		std::string _description;
-		basic_register_machine& _rm;
-	public:
-		instruction(const std::string& description, basic_register_machine& rm) : _description(description), _rm(rm) {}
-		virtual ~instruction() = default;
-		const std::string& description() const noexcept;
-		virtual void execute() noexcept = 0;
-	};
-
-	// Класс инструкции присваивания
-	class assigment_instruction : public instruction {
-	public:
-		assigment_instruction(const std::string& description, basic_register_machine& rm) : instruction(description, rm) {}
-		void execute() noexcept override;
-
-	};
-
-	class condition_instruction : public instruction {
-	public:
-		condition_instruction(const std::string& description, basic_register_machine& rm) : instruction(description, rm) {}
-		void execute() noexcept override;
-	};
-
-	class stop_instruction : public instruction {
-	public:
-		stop_instruction(const std::string& description, basic_register_machine& rm) : instruction(description, rm) {}
-		void execute() noexcept override;
-	};
-
-	class extended_condition_instruction : public condition_instruction {
-	public:
-		extended_condition_instruction(const std::string& description, basic_register_machine& rm) : condition_instruction(description, rm) {}
-		void execute() noexcept override;
-	};
-
-	class goto_instruction : public instruction {
-	public:
-		goto_instruction(const std::string& description, basic_register_machine& rm) : instruction(description, rm) {}
-		void execute() noexcept override;
-	};
-
-	class move_instruction : public instruction {
-	public:
-		move_instruction(const std::string& description, basic_register_machine& rm) : instruction(description, rm) {}
-		void execute() noexcept override;
-	};
-
 	// Класс базовой РМ
 	class basic_register_machine {
-		friend class assigment_instruction;
-		friend class condition_instruction;
-		friend class stop_instruction;
-		friend class goto_instruction;
-		friend class extended_condition_instruction;
-		friend class move_instruction;
+	protected:
+		// Класс инструкции
+		class instruction {
+		protected:
+			// Описание
+			std::string _description;
+			// Регистровая машина
+			basic_register_machine& _rm;
+		public:
+			// Конструктор
+			instruction(const std::string& description, basic_register_machine& rm) noexcept;
+			// Деструктор
+			virtual ~instruction() = default;
+
+			// Возвращает описание инструкции
+			const std::string& description() const noexcept;
+			// Выполняет инструкцию
+			virtual void execute() noexcept = 0;
+		};
+
+		// Класс инструкции копирующего присваивания
+		class assigment_instruction : public instruction {
+		public:
+			// Конструктор
+			assigment_instruction(const std::string& description, basic_register_machine& rm) noexcept;
+			// Деструктор
+			~assigment_instruction() override = default;
+
+			// Выполнение инструкции копирующего присваивания
+			void execute() noexcept override;
+		};
+
+		// Класс условной инструкции
+		class condition_instruction : public instruction {
+		public:
+			// Конструктор
+			condition_instruction(const std::string& description, basic_register_machine& rm) noexcept;
+			// Деструктор
+			~condition_instruction() override = default;
+
+			// Выполнение условной инструкции
+			void execute() noexcept override;
+		};
+
+		// Класс остановочной инструкции
+		class stop_instruction : public instruction {
+		public:
+			// Конструктор
+			stop_instruction(const std::string& description, basic_register_machine& rm) noexcept;
+			// Деструктор
+			~stop_instruction() override = default;
+
+			// Выполнение остановочной инструкции
+			void execute() noexcept override;
+		};
+
+		// Класс расширенной условной инструкции
+		class extended_condition_instruction : public condition_instruction {
+		public:
+			// Конструктор
+			extended_condition_instruction(const std::string& description, basic_register_machine& rm) noexcept;
+			// Деструктор
+			~extended_condition_instruction() override = default;
+
+			// Выполнение расширенной условной инструкции
+			void execute() noexcept override;
+		};
+
+		// Класс инструкции передвижения
+		class goto_instruction : public instruction {
+		public:
+			// Конструктор
+			goto_instruction(const std::string& description, basic_register_machine& rm) noexcept;
+			// Деструктор
+			~goto_instruction() override = default;
+
+			// Выполнение инструкции передвижения
+			void execute() noexcept override;
+		};
+
+		// Класс инструкции перемещающего присваивания
+		class move_instruction : public instruction {
+		public:
+			// Конструктор
+			move_instruction(const std::string& description, basic_register_machine& rm) noexcept;
+			// Деструктор
+			~move_instruction() override = default;
+
+			// Выполнение инструкции перемещающего присваивания
+			void execute() noexcept override;
+		};
 	protected:
 		// Флаг, указывающий остановлена ли РМ
 		bool _is_stopped;
@@ -161,7 +196,7 @@ namespace IMD {
 
 		// Проверка корректности формата условной инструкции
 		virtual bool is_valid_condition_instruction(const std::string& instruction) const noexcept;
-		// Проверка корректности формата инструкции присваивания
+		// Проверка корректности формата инструкции копирующего присваивания
 		virtual bool is_valid_assignment_instruction(const std::string& instruction) const noexcept;
 		// Проверка корректности формата остановочной команды
 		virtual bool is_valid_stop_instruction(const std::string& instruction) const noexcept;
@@ -212,9 +247,8 @@ namespace IMD {
 
 		// Проверка корректности формата условной инструкции
 		bool is_valid_condition_instruction(const std::string& instruction) const noexcept override;
-		// Проверка корректности формата инструкции присваивания
+		// Проверка корректности формата инструкции копирующего присваивания
 		bool is_valid_assignment_instruction(const std::string& instruction) const noexcept override;
-
 
 		// Проверка корректности формата инструкции перемещения
 		bool is_valid_move_instruction(const std::string& instruction) const noexcept;

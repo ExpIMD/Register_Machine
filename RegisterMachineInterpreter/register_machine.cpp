@@ -10,39 +10,17 @@ namespace IMD {
 
 	// Реализация инструкций
 
-	const std::string& instruction::description() const noexcept {
+	// Конструктор
+	basic_register_machine::instruction::instruction(const std::string& description, basic_register_machine& rm) noexcept : _description(description), _rm(rm) {}
+	// Возвращает описание инструкции
+	const std::string& basic_register_machine::instruction::description() const noexcept {
 		return this->_description;
 	}
 
-	void goto_instruction::execute() noexcept {
-		auto goto_position = this->_description.find(GOTO);
-		auto L = this->_description.substr(goto_position + GOTO.length());
-
-		trim(L);
-
-		this->_rm._carriage = std::stoi(L);
-	}
-
-	void move_instruction::execute() noexcept {
-		++this->_rm._carriage;
-
-		auto separator_position = this->_description.find(MOVE);
-		std::string left_part = this->_description.substr(0, separator_position);
-		std::string right_part = this->_description.substr(separator_position + MOVE.length());
-
-		trim(left_part);
-		trim(right_part);
-
-		if (!is_register(right_part) || !is_register(left_part))
-			throw std::runtime_error("");
-
-		this->_rm._registers[left_part] = this->_rm._registers[right_part];
-		this->_rm._registers[right_part] = 0;
-
-		return;
-	}
-
-	void assigment_instruction::execute() noexcept {
+	// Конструктор
+	basic_register_machine::assigment_instruction::assigment_instruction(const std::string& description, basic_register_machine& rm) noexcept : instruction(description, rm) {}
+	// Выполнение инструкции копирующего присваивания
+	void basic_register_machine::assigment_instruction::execute() noexcept {
 
 		++this->_rm._carriage;
 
@@ -89,7 +67,10 @@ namespace IMD {
 		return;
 	}
 
-	void condition_instruction::execute() noexcept {
+	// Конструктор
+	basic_register_machine::condition_instruction::condition_instruction(const std::string& description, basic_register_machine& rm) noexcept : instruction(description, rm) {}
+	// Выполнение условной инструкции
+	void basic_register_machine::condition_instruction::execute() noexcept {
 		auto if_position = this->_description.find(IF);
 		auto then_position = this->_description.find(THEN);
 		auto else_position = this->_description.find(ELSE);
@@ -115,12 +96,17 @@ namespace IMD {
 		if (this->_rm._registers[left_part] == 0) this->_rm._carriage = std::stoi(true_L);
 		else this->_rm._carriage = std::stoi(false_L);
 	}
-
-	void stop_instruction::execute() noexcept {
+	// Конструктор
+	basic_register_machine::stop_instruction::stop_instruction(const std::string& description, basic_register_machine& rm) noexcept: instruction(description, rm) {}
+	// Выполнение остановочной инструкции
+	void basic_register_machine::stop_instruction::execute() noexcept {
 		this->_rm._is_stopped = true;
 	}
 
-	void extended_condition_instruction::execute() noexcept {
+	// Конструктор
+	basic_register_machine::extended_condition_instruction::extended_condition_instruction(const std::string& description, basic_register_machine& rm) noexcept: condition_instruction(description, rm) {}
+	// Выполнение расширенной условной инструкции
+	void basic_register_machine::extended_condition_instruction::execute() noexcept {
 		auto if_position = this->_description.find(IF);
 		auto then_position = this->_description.find(THEN);
 		auto else_position = this->_description.find(ELSE);
@@ -151,6 +137,40 @@ namespace IMD {
 			if (this->_rm._registers[left_part] == std::stoi(right_part)) this->_rm._carriage = std::stoi(true_L);
 			else this->_rm._carriage = std::stoi(false_L);
 		}
+	}
+
+	// Конструктор
+	basic_register_machine::goto_instruction::goto_instruction(const std::string& description, basic_register_machine& rm) noexcept : instruction(description, rm) {}
+	// Выполнение инструкции передвижения
+	void basic_register_machine::goto_instruction::execute() noexcept {
+		auto goto_position = this->_description.find(GOTO);
+		auto L = this->_description.substr(goto_position + GOTO.length());
+
+		trim(L);
+
+		this->_rm._carriage = std::stoi(L);
+	}
+
+	//Конструктор
+	basic_register_machine::move_instruction::move_instruction(const std::string& description, basic_register_machine& rm) noexcept : instruction(description, rm) {}
+	// Выполнение инструкции перемещения
+	void basic_register_machine::move_instruction::execute() noexcept {
+		++this->_rm._carriage;
+
+		auto separator_position = this->_description.find(MOVE);
+		std::string left_part = this->_description.substr(0, separator_position);
+		std::string right_part = this->_description.substr(separator_position + MOVE.length());
+
+		trim(left_part);
+		trim(right_part);
+
+		if (!is_register(right_part) || !is_register(left_part))
+			throw std::runtime_error("");
+
+		this->_rm._registers[left_part] = this->_rm._registers[right_part];
+		this->_rm._registers[right_part] = 0;
+
+		return;
 	}
 
 	// Реализация вспомогательных методов
@@ -357,8 +377,10 @@ namespace IMD {
 
 		std::string variable;
 		std::istringstream iss(line);
-		while (iss >> variable)
+		while (iss >> variable) {
 			this->_input_registers.push_back(variable);
+			this->_registers.try_emplace(variable, 0);
+		}
 	}
 
 	// Парсинг выходных регистров
@@ -368,8 +390,10 @@ namespace IMD {
 
 		std::string variable;
 		std::istringstream iss(line);
-		while (iss >> variable)
+		while (iss >> variable) {
 			this->_output_registers.push_back(variable);
+			this->_registers.try_emplace(variable, 0);
+		}
 	}
 
 	// Получает целочисленное значение из строки, в которой может быть описани литерал или регистр
@@ -404,6 +428,9 @@ namespace IMD {
 				this->load_all_instructions();
 
 				if (results.size() > 0) { // Если есть сохранённые результаты, передаем их во входные регистры
+					if (results.size() < this->_input_registers.size()) // Проверка на соотношение входов и выходов связанных РМ
+						throw std::runtime_error("Not enough input values for arguments");
+
 					size_t index{ 0 };
 					for (const auto& x : this->_input_registers) {
 						this->_registers[x] = results[index];
@@ -416,6 +443,9 @@ namespace IMD {
 						std::cin >> this->_registers[x];
 					}
 				}
+
+				if (this->_is_verbose)
+					std::cout << this->_filename << std::endl;
 
 				this->execute_all_instructions(); // Выполнение верхнего файла
 			}

@@ -5,10 +5,15 @@
 int main() {
 	setlocale(LC_ALL, "Russian");
 
-	std::string filename{ "RM4.txt" };
+	std::string filename{ "RM5.txt" };
 	IMD::extended_register_machine RM(filename, false);
 
-	RM.run();
+	try {
+		RM.run();
+	}
+	catch (const std::exception& e) {
+		std::cout << e.what();
+	}
 
 	return 0;
 }
