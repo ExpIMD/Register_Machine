@@ -8,8 +8,12 @@ int main() {
 	std::string filename{ "RM1.txt" };
 	IMD::extended_register_machine RM(filename, true);
 
-	RM.run();
-
+	try {
+		RM.run();
+	}
+	catch (const std::exception& e) {
+		std::cout << e.what();
+	}
 
 	return 0;
 }

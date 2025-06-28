@@ -108,6 +108,8 @@ namespace IMD {
 		virtual bool is_valid_stop_instruction(const std::string& instruction) const noexcept;
 		// Проверка корректности формата строки с входными регистрами
 		virtual bool is_valid_input_registers_line(const std::string& instruction) const noexcept;
+		// Проверка корректности формата строки с выходными регистрами
+		virtual bool is_valid_output_registers_line(const std::string& instruction) const noexcept;
 
 		// Выполнение инструкции присваивания
 		virtual void execute_assigment_instruction(const std::string& instruction);

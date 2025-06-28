@@ -104,7 +104,7 @@ namespace IMD {
 	// Печать выходных регистров без перехода на новую строку
 	void basic_register_machine::print_output_registers(const std::string& separator) const noexcept {
 		for (const auto& x : this->_output_registers)
-			std::cout << x << ": " << this->_registers.at(x) << separator;
+			std::cout << x << ": " << this->_registers.at(x) << separator; // TODO: ошибка если переменная объявлена только на выходе
 	}
 	// Печать выходных регистров с переходом на новую строку
 	void basic_register_machine::println_output_registers(const std::string& separator) const noexcept {
@@ -151,7 +151,7 @@ namespace IMD {
 			trim(number);
 
 			if (std::stoi(number) != expected_number) // Проверка на последовательную нумерацию меток
-				throw std::invalid_argument("The instructions are not written in sequence");
+				throw std::invalid_argument("Filename: " + this->_filename + ", The instructions are not written in sequence");
 
 			this->_instructions.push_back(instruction);
 			++expected_number;
@@ -162,7 +162,7 @@ namespace IMD {
 
 		// Проверка, что после выходных аргументов ничего нет
 		if (std::getline(ifs, line))
-			throw std::invalid_argument("Unexpected data after output registers");
+			throw std::invalid_argument("Filename: " + this->_filename + ", unexpected data after output registers");
 	}
 
 	// Выполнение всех инструкций
@@ -194,7 +194,7 @@ namespace IMD {
 				break;
 			}
 
-			throw std::runtime_error("The label contains an unknown instruction");
+			throw std::runtime_error("Filename: " + this->_filename + ", The label contains an unknown instruction");
 		}
 	}
 
@@ -225,12 +225,18 @@ namespace IMD {
 		std::regex regex{ pattern };
 		return std::regex_match(instruction, regex);
 	}
+	// Проверка корректности формата строки с выходными регистрами
+	bool basic_register_machine::is_valid_output_registers_line(const std::string& instruction) const noexcept {
+		std::string pattern{ R"(^\s*(\w+)(\s+\w+)*\s*$)"s };
+		std::regex regex{ pattern };
+		return std::regex_match(instruction, regex);
+	}
 
 
 	// Выполнение инструкции присваивания
 	void basic_register_machine::execute_assigment_instruction(const std::string& command) {
 		if (!this->is_valid_assignment_instruction(command))
-			throw std::runtime_error("The assignment statement has an invalid format");
+			throw std::runtime_error("Filename: " + this->_filename + ", the assignment statement has an invalid format");
 
 		auto separator_position = command.find(ASSIGNMENT);
 		std::string left_part = command.substr(0, separator_position);
@@ -278,7 +284,7 @@ namespace IMD {
 	// Выполнение условной инструкции 
 	void basic_register_machine::execute_condition_instruction(const std::string& command) {
 		if (!this->is_valid_condition_instruction(command))
-			throw std::runtime_error("The conditional construct has an invalid format");
+			throw std::runtime_error("Filename: " + this->_filename + ", the conditional construct has an invalid format");
 
 		auto if_position = command.find(IF);
 		auto then_position = command.find(THEN);
@@ -311,7 +317,7 @@ namespace IMD {
 	// Выполнение остановочной инструкции
 	void basic_register_machine::execute_stop_instruction(const std::string& command) {
 		if (!this->is_valid_stop_instruction(command))
-			throw std::runtime_error("The stop instruction is in an invalid format");
+			throw std::runtime_error("Filename: " + this->_filename + ", the stop instruction is in an invalid format");
 
 		this->_carriage = 0;
 	}
@@ -319,7 +325,7 @@ namespace IMD {
 	// Парсинг входных регистров
 	void basic_register_machine::parse_input_registers(const std::string& line) {
 		if (!this->is_valid_input_registers_line(line))
-			throw std::runtime_error("The line does not contain input registers");
+			throw std::runtime_error("Filename: " + this->_filename + ", the line does not contain input registers");
 
 		std::string variable;
 		std::istringstream iss(line);
@@ -329,6 +335,8 @@ namespace IMD {
 
 	// Парсинг выходных регистров
 	void basic_register_machine::parse_output_registers(const std::string& line) {
+		if (!this->is_valid_output_registers_line(line))
+			throw std::runtime_error("Filename: " + this->_filename + ", the line does not contain output registers");
 		std::string variable;
 		std::istringstream iss(line);
 		while (iss >> variable)
@@ -409,7 +417,7 @@ namespace IMD {
 		std::string line;
 
 		if (!ifs) // Выброс исключения, если файл не найден
-			throw std::runtime_error("Error processing file");
+			throw std::runtime_error("Filename: " + this->_filename + ", error processing file");
 
 
 		while (std::getline(ifs, line) && line.find(COMPOSITION) != std::string::npos); // Команда композиции не является инструкцией, поэтому пропускаем её
@@ -432,7 +440,7 @@ namespace IMD {
 			trim(number);
 
 			if (std::stoi(number) != expected_number)
-				throw std::invalid_argument("The instructions are not written in sequence");
+				throw std::invalid_argument("Filename: " + this->_filename + ", the instructions are not written in sequence");
 
 			this->_instructions.push_back(instruction);
 			++expected_number;
@@ -443,7 +451,7 @@ namespace IMD {
 
 		// Проверка, что после выходных аргументов ничего нет
 		if (std::getline(ifs, line))
-			throw std::invalid_argument("Unexpected data after output registers");
+			throw std::invalid_argument("Filename: " + this->_filename + ", unexpected data after output registers");
 	}
 
 	// Выполнение всех команд
@@ -486,13 +494,13 @@ namespace IMD {
 				break;
 			}
 
-			throw std::runtime_error("The label contains an unknown instruction");
+			throw std::runtime_error("Filename: " + this->_filename + ", the label contains an unknown instruction");
 		}
 	}
 
 	void extended_register_machine::execute_assigment_instruction(const std::string& command) {
 		if (!this->is_valid_assignment_instruction(command))
-			throw std::runtime_error("The assignment statement has an invalid format");
+			throw std::runtime_error("Filename: " + this->_filename + ", the assignment statement has an invalid format");
 
 		auto separator_position = command.find(ASSIGNMENT);
 		std::string left_part = command.substr(0, separator_position);
@@ -537,7 +545,7 @@ namespace IMD {
 
 	void extended_register_machine::execute_condition_instruction(const std::string& command) {
 		if (!this->is_valid_condition_instruction(command))
-			throw std::runtime_error("The conditional construct has an invalid format");
+			throw std::runtime_error("Filename: " + this->_filename + ", the conditional construct has an invalid format");
 
 		auto if_position = command.find(IF);
 		auto then_position = command.find(THEN);
@@ -575,7 +583,7 @@ namespace IMD {
 	// Выполнение инструкции перемещения
 	void extended_register_machine::execute_move_instruction(const std::string& command) {
 		if (!this->is_valid_move_instruction(command))
-			throw std::runtime_error("The assignment statement has an invalid format");
+			throw std::runtime_error("Filename: " + this->_filename + ", the assignment statement has an invalid format");
 
 		auto separator_position = command.find(MOVE);
 		std::string left_part = command.substr(0, separator_position);
@@ -596,7 +604,7 @@ namespace IMD {
 	// Выполнение инструкции передвижения
 	void extended_register_machine::execute_goto_instruction(const std::string& command) {
 		if (!is_valid_goto_instruction(command))
-			throw std::runtime_error("The goto statement has an invalid format");
+			throw std::runtime_error("Filename: " + this->_filename + ", the goto statement has an invalid format");
 
 		auto goto_position = command.find(GOTO);
 		auto L = command.substr(goto_position + GOTO.length());
@@ -621,13 +629,13 @@ namespace IMD {
 
 	// Проверка корректности формата инструкции перемещения
 	bool extended_register_machine::is_valid_move_instruction(const std::string& command) const noexcept {
-		std::string pattern{ R"(^\s*(\w+)\s*)"s + MOVE + R"(\s*(\w+)\s*$)"};
+		std::string pattern{ R"(^\s*(\w+)\s*)"s + MOVE + R"(\s*(\w+)\s*$)" };
 		std::regex regex{ pattern };
 		return std::regex_match(command, regex);
 	}
 	// Проверка корректности формата инструкции передвижения
 	bool extended_register_machine::is_valid_goto_instruction(const std::string& command) const noexcept {
-		std::string pattern{ R"(^\s*)"s + GOTO + R"(\s+(\w+)\s*$)"};
+		std::string pattern{ R"(^\s*)"s + GOTO + R"(\s+(\w+)\s*$)" };
 		std::regex regex{ pattern };
 		return std::regex_match(command, regex);
 	}
