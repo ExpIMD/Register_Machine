@@ -1,4 +1,4 @@
-#include "register_machine.h"
+п»ї#include "register_machine.h"
 #include <fstream>
 #include <iostream>
 #include <regex>
@@ -6,564 +6,652 @@
 #include <stdexcept>
 #include <string>
 
-// Сброс РМ
-void basic_register_machine::reset() {
-	this->_carriage = 0;
-	this->_registers.clear();
-	this->_instructions.resize(0);
-	this->_output_registers.resize(0);
-	this->_input_registers.resize(0);
-	this->_filename = ""s;
-}
+namespace IMD {
 
-// Обработка всех инструкций COMPOSITION в текущем файла и добавление включаемых файлов в стек
-void extended_register_machine::_include_files(const std::string& filename) {
-	std::ifstream ifs(filename);
-	std::string line;
-	std::vector<std::string> filenames;
+	// Р РµР°Р»РёР·Р°С†РёСЏ РІСЃРїРѕРјРѕРіР°С‚РµР»СЊРЅС‹С… РјРµС‚РѕРґРѕРІ
 
-	_file_stack.push({ filename, true });
-
-	while (std::getline(ifs, line)) {
-		auto composition_position = line.find(COMPOSITION);
-		if (composition_position == std::string::npos) break;
-
-		auto filename = line.substr(composition_position + COMPOSITION.length()); // Получение имени включаемого файла
-
-		trim(filename);
-
-		filenames.push_back(filename);
+	// РЈРґР°Р»РµРЅРёРµ Р»РёС€РЅРёС… РїСЂРѕР±РµР»РѕРІ СЃР»РµРІР° Рё СЃРїСЂР°РІР° РѕС‚ СЃС‚СЂРѕРєРё
+	void trim(std::string& line) {
+		line.erase(0, line.find_first_not_of(" \t\r\n"));
+		if (line.empty()) return;
+		line.erase(line.find_last_not_of(" \t\r\n") + 1);
 	}
 
-	for (auto it = filenames.rbegin(); it != filenames.rend(); ++it)
-		_file_stack.push({ *it, false });
-}
+	bool is_register(const std::string& line) noexcept {
+		if (line.empty())
+			return false;
 
-// Запуск РМ
-void basic_register_machine::run() {
-	this->load_all_instructions();
-	for (const auto& x : this->_input_registers) {
-		std::cout << "Введите значения для " << x << ": ";
-		std::cin >> this->_registers[x];
+		if (!std::isalpha(line[0]))
+			return false; // РџРµСЂРІС‹Р№ СЃРёРјРІРѕР» СЂРµРіРёСЃС‚СЂР° РґРѕР»Р¶РµРЅ Р±С‹С‚СЊ Р±СѓРєРІРѕР№
+
+		for (size_t i{ 1 }; i < line.size(); ++i) // РћСЃС‚Р°Р»СЊРЅС‹Рµ СЃРёРјРІРѕР»С‹ СЂРµРіРёСЃС‚СЂР° РјРѕРіСѓС‚ Р±С‹С‚СЊ Р±СѓРєРІР°РјРё РёР»Рё С†РёС„СЂР°РјРё
+			if (!std::isalnum(line[i]))
+				return false;
+
+		return true;
 	}
-	this->execute_all_instructions();
-	this->print_output_registers(" ");
-}
 
-// Запуск РМ
-void extended_register_machine::run() {
-	this->_include_files(_filename);
-	while (!this->_file_stack.empty()) {
-		auto [file, flag] = this->_file_stack.top();
-		this->_file_stack.pop();
+	// Р РµР°Р»РёР·Р°С†РёСЏ Р±Р°Р·РѕРІРѕР№ Р Рњ
 
-		if (!flag) {
-			this->_include_files(file);
+	// РљРѕРЅСЃС‚СЂСѓРєС‚РѕСЂ
+	basic_register_machine::basic_register_machine(const std::string& filename, bool is_verbose) noexcept : _filename(filename), _is_verbose(is_verbose), _carriage(0), _registers(), _instructions(), _output_registers() {}
+	// РћРїРµСЂР°С‚РѕСЂ РїСЂРёСЃРІР°РёРІР°РЅРёСЏ
+	basic_register_machine& basic_register_machine::operator=(const basic_register_machine& other) noexcept {
+		if (this != &other) { // РџСЂРѕРІРµСЂРєР° РЅР° СЃР°РјРѕРїСЂРёСЃРІР°РёРІР°РЅРёРµ
+			this->_carriage = other._carriage;
+			this->_registers = other._registers;
+			this->_instructions = other._instructions;
+			this->_output_registers = other._output_registers;
+			this->_filename = other._filename;
+			this->_is_verbose = other._is_verbose;
+		}
+		return *this;
+	}
+	// РћРїРµСЂР°С‚РѕСЂ move-РїСЂРёСЃРІР°РёРІР°РЅРёСЏ
+	basic_register_machine& basic_register_machine::operator=(basic_register_machine&& other) noexcept {
+		this->_carriage = std::move(other._carriage);
+		this->_registers = std::move(other._registers);
+		this->_instructions = std::move(other._instructions);
+		this->_output_registers = std::move(other._output_registers);
+		this->_filename = std::move(other._filename);
+		this->_is_verbose = std::move(other._is_verbose);
+		return *this;
+	}
+
+	// Р—Р°РїСѓСЃРє Р Рњ
+	void basic_register_machine::run() {
+		this->load_all_instructions();
+
+		for (const auto& x : this->_input_registers) { // Р—Р°РїСЂРѕСЃ РІРІРѕРґР° Р·РЅР°С‡РµРЅРёСЏ РґР»СЏ РІС…РѕРґРЅС‹С… СЂРµРіРёСЃС‚СЂРѕРІ
+			std::cout << "Р’РІРµРґРёС‚Рµ Р·РЅР°С‡РµРЅРёСЏ РґР»СЏ " << x << ": ";
+			std::cin >> this->_registers[x];
+		}
+
+		this->execute_all_instructions();
+		this->print_output_registers(" "); // Р’С‹РІРѕРґ РІС‹С…РѕРґРЅС‹С… СЂРµРіРёСЃС‚СЂРѕРІ
+	}
+
+	// РЎР±СЂРѕСЃ Р Рњ
+	void basic_register_machine::reset() {
+		this->_carriage = 0;
+		this->_registers.clear();
+		this->_instructions.resize(0);
+		this->_output_registers.resize(0);
+		this->_input_registers.resize(0);
+		this->_filename = ""s;
+	}
+
+	// РџРµС‡Р°С‚СЊ РІС…РѕРґРЅС‹С… СЂРµРіРёСЃС‚СЂРѕРІ Р±РµР· РїРµСЂРµС…РѕРґР° РЅР° РЅРѕРІСѓСЋ СЃС‚СЂРѕРєСѓ
+	void basic_register_machine::print_input_registers(const std::string& separator) const noexcept {
+		for (const auto& reg : this->_input_registers) std::cout << reg << ": " << this->_registers.at(reg) << separator;
+	}
+	// РџРµС‡Р°С‚СЊ РІС…РѕРґРЅС‹С… СЂРµРіРёСЃС‚СЂРѕРІ СЃ РїРµСЂРµС…РѕРґРѕРј РЅР° РЅРѕРІСѓСЋ СЃС‚СЂРѕРєСѓ
+	void basic_register_machine::println_input_registers(const std::string& separator) const noexcept {
+		basic_register_machine::print_input_registers(separator);
+		std::cout << std::endl;
+	}
+
+	// РџРµС‡Р°С‚СЊ РІСЃРµС… СЂРµРіРёСЃС‚СЂРѕРІ Р±РµР· РїРµСЂРµС…РѕРґР° РЅР° РЅРѕРІСѓСЋ СЃС‚СЂРѕРєСѓ
+	void basic_register_machine::print_all_registers(const std::string& separator) const noexcept {
+		for (const auto& [x, y] : this->_registers) std::cout << x << ": " << y << separator;
+	}
+	// РџРµС‡Р°С‚СЊ РІСЃРµС… СЂРµРіРёСЃС‚СЂРѕРІ СЃ РїРµСЂРµС…РѕРґРѕРј РЅР° РЅРѕРІСѓСЋ СЃС‚СЂРѕРєСѓ
+	void basic_register_machine::println_all_registers(const std::string& separator) const noexcept {
+		basic_register_machine::print_all_registers(separator);
+		std::cout << std::endl;
+	}
+
+	// РџРµС‡Р°С‚СЊ РІС‹С…РѕРґРЅС‹С… СЂРµРіРёСЃС‚СЂРѕРІ Р±РµР· РїРµСЂРµС…РѕРґР° РЅР° РЅРѕРІСѓСЋ СЃС‚СЂРѕРєСѓ
+	void basic_register_machine::print_output_registers(const std::string& separator) const noexcept {
+		for (const auto& x : this->_output_registers)
+			std::cout << x << ": " << this->_registers.at(x) << separator;
+	}
+	// РџРµС‡Р°С‚СЊ РІС‹С…РѕРґРЅС‹С… СЂРµРіРёСЃС‚СЂРѕРІ СЃ РїРµСЂРµС…РѕРґРѕРј РЅР° РЅРѕРІСѓСЋ СЃС‚СЂРѕРєСѓ
+	void basic_register_machine::println_output_registers(const std::string& separator) const noexcept {
+		basic_register_machine::print_output_registers(separator);
+		std::cout << std::endl;
+	}
+
+	// РџРµС‡Р°С‚СЊ РєР°СЂРµС‚РєРё Р±РµР· РїРµСЂРµС…РѕРґР° РЅР° РЅРѕРІСѓСЋ СЃС‚СЂРѕРєСѓ
+	void basic_register_machine::print_carriage(const std::string& separator) const noexcept {
+		std::cout << "carriage: " << this->_carriage << separator;
+	}
+	// РџРµС‡Р°С‚СЊ РєР°СЂРµС‚РєРё СЃ РїРµСЂРµС…РѕРґРѕРј РЅР° РЅРѕРІСѓСЋ СЃС‚СЂРѕРєСѓ
+	void basic_register_machine::println_carriage(const std::string& separator) const noexcept {
+		basic_register_machine::print_carriage(separator);
+		std::cout << std::endl;
+	}
+
+	// Р—Р°РіСЂСѓР·РєР° РІСЃРµС… РєРѕРјР°РЅРґ
+	void basic_register_machine::load_all_instructions() {
+		std::ifstream ifs(this->_filename);
+		std::string line;
+
+		// TODO: РїСЂРѕРІРµСЂРєР° С„РѕСЂРјР°С‚Р°
+
+		if (!ifs) // Р’С‹Р±СЂРѕСЃ РёСЃРєР»СЋС‡РµРЅРёСЏ, РµСЃР»Рё С„Р°Р№Р» РЅРµ РЅР°Р№РґРµРЅ
+			throw std::runtime_error("Error processing file");
+
+		// РџРµСЂРІР°СЏ СЃС‚СЂРѕРєР° СЃРѕРґРµСЂР¶РёС‚ Р°СЂРіСѓРјРµРЅС‚С‹, СЂР°Р·РґРµР»С‘РЅРЅС‹Рµ РїСЂРѕР±РµР»Р°РјРё
+		if (std::getline(ifs, line)) {
+			this->parse_input_registers(line);
+		}
+
+		// РџРѕСЃР»РµРґСѓСЋС‰РёРµ СЃС‚СЂРѕРєРё, Р·Р° РёСЃРєР»СЋС‡РµРЅРёРµРј РїРѕСЃР»РµРґРЅРµР№, СЃРѕРґРµСЂР¶Р°С‚ РјРµС‚РєРё
+		size_t expected_number{ 0 }; // РћР¶РёРґР°РµРјС‹Р№ РЅРѕРјРµСЂ РјРµС‚РєРё
+		while (std::getline(ifs, line)) {
+			auto separator_position = line.find(SEPARATOR);
+			if (separator_position == std::string::npos)
+				break;
+
+			std::string number = line.substr(0, separator_position);
+			std::string instruction = line.substr(separator_position + SEPARATOR.length());
+
+			trim(instruction);
+			trim(number);
+
+			if (std::stoi(number) != expected_number) // РџСЂРѕРІРµСЂРєР° РЅР° РїРѕСЃР»РµРґРѕРІР°С‚РµР»СЊРЅСѓСЋ РЅСѓРјРµСЂР°С†РёСЋ РјРµС‚РѕРє
+				throw std::invalid_argument("The instructions are not written in sequence");
+
+			this->_instructions.push_back(instruction);
+			++expected_number;
+		}
+
+		// Р’ РїРѕСЃР»РµРґРЅРµР№ СЃС‚СЂРѕРєРµ РѕРїРёСЃС‹РІР°СЋС‚СЃСЏ РІС‹С…РѕРґРЅС‹Рµ СЂРµРіРёСЃС‚СЂС‹
+		this->parse_output_registers(line);
+
+		// РџСЂРѕРІРµСЂРєР°, С‡С‚Рѕ РїРѕСЃР»Рµ РІС‹С…РѕРґРЅС‹С… Р°СЂРіСѓРјРµРЅС‚РѕРІ РЅРёС‡РµРіРѕ РЅРµС‚
+		if (std::getline(ifs, line))
+			throw std::invalid_argument("Unexpected data after output registers");
+	}
+
+	// Р’С‹РїРѕР»РЅРµРЅРёРµ РІСЃРµС… РёРЅСЃС‚СЂСѓРєС†РёР№
+	void basic_register_machine::execute_all_instructions() {
+		while (true) {
+			const auto& current_instruction = this->_instructions[this->_carriage];
+
+			// Р’С‹РІРѕРґ С‚РµРєСѓС‰РµРіРѕ СЃРѕСЃС‚РѕСЏРЅРёСЏ Р Рњ
+			if (this->_is_verbose) {
+				this->println_all_registers();
+				std::cout << this->_carriage << ": " << current_instruction << std::endl;
+			}
+
+			// РћРїСЂРµРґРµР»РµРЅРёРµ С‚РёРїР° РёРЅСЃС‚СЂСѓРєС†РёРё
+
+			if (current_instruction.find(ASSIGNMENT) != std::string::npos) {
+				this->execute_assigment_instruction(current_instruction);
+				++this->_carriage;
+				continue;
+			}
+
+			if (current_instruction.find(IF) != std::string::npos) {
+				this->execute_condition_instruction(current_instruction);
+				continue;
+			}
+
+			if (current_instruction.find(STOP) != std::string::npos) { // Р Рњ Р·Р°РІРµСЂС€Р°РµС‚ СЃРІРѕСЋ СЂР°Р±РѕС‚Сѓ С‚РѕР»СЊРєРѕ РїРѕ РґРѕСЃС‚РёР¶РµРЅРёСЋ РѕСЃС‚Р°РЅРѕРІРѕС‡РЅРѕР№ РёРЅСЃС‚СЂСѓРєС†РёРё
+				this->execute_stop_instruction(current_instruction);
+				break;
+			}
+
+			throw std::runtime_error("The label contains an unknown instruction");
+		}
+	}
+
+
+	// РџСЂРѕРІРµСЂРєР° РєРѕСЂСЂРµРєС‚РЅРѕСЃС‚Рё СѓСЃР»РѕРІРЅРѕР№ РёРЅСЃС‚СЂСѓРєС†РёРё
+	bool basic_register_machine::is_valid_condition_instruction(const std::string& instruction) const noexcept {
+		std::string pattern{ R"(^\s*)"s + IF + R"(\s+(\w+)\s*)"s + EQUAL + R"(\s*0\s+)"s + THEN + R"(\s+)"s + GOTO + R"(\s+(\d+)\s+)"s + ELSE + R"(\s+)"s + GOTO + R"(\s+(\d+)\s*$)"s };
+		std::regex regex{ pattern };
+		return std::regex_match(instruction, regex);
+	}
+	// РџСЂРѕРІРµСЂРєР° РєРѕСЂСЂРµРєС‚РЅРѕСЃС‚Рё РёРЅСЃС‚СЂСѓРєС†РёРё РїСЂРёСЃРІР°РёРІР°РЅРёСЏ
+	bool basic_register_machine::is_valid_assignment_instruction(const std::string& instruction) const noexcept {
+		const std::string pm = "["s + PLUS + MINUS + "]"s;
+
+		std::string pattern{ R"(^\s*(\w+)\s*)"s + ASSIGNMENT + R"(\s*(?:(\d+)|\1\s*)"s + pm + R"(\s*1|1\s*)"s + pm + R"(\s*\1)\s*$)"s };
+		std::regex regex{ pattern };
+		return std::regex_match(instruction, regex);
+	}
+	// РџСЂРѕРІРµСЂРєР° РєРѕСЂСЂРµРєС‚РЅРѕСЃС‚Рё С„РѕСЂРјР°С‚Р° РѕСЃС‚Р°РЅРѕРІРѕС‡РЅРѕР№ РєРѕРјР°РЅРґС‹
+	bool basic_register_machine::is_valid_stop_instruction(const std::string& instruction) const noexcept {
+		std::string pattern{ R"(^\s*)"s + STOP + R"(\s*$)"s };
+		std::regex regex{ pattern };
+		return std::regex_match(instruction, regex);
+	}
+	// РџСЂРѕРІРµСЂРєР° РєРѕСЂСЂРµРєС‚РЅРѕСЃС‚Рё С„РѕСЂРјР°С‚Р° СЃС‚СЂРѕРєРё СЃ РІС…РѕРґРЅС‹РјРё СЂРµРіРёСЃС‚СЂР°РјРё
+	bool basic_register_machine::is_valid_input_registers_line(const std::string& instruction) const noexcept {
+		std::string pattern{ R"(^\s*(\w+)(\s+\w+)*\s*$)"s };
+		std::regex regex{ pattern };
+		return std::regex_match(instruction, regex);
+	}
+
+
+	// Р’С‹РїРѕР»РЅРµРЅРёРµ РёРЅСЃС‚СЂСѓРєС†РёРё РїСЂРёСЃРІР°РёРІР°РЅРёСЏ
+	void basic_register_machine::execute_assigment_instruction(const std::string& command) {
+		if (!this->is_valid_assignment_instruction(command))
+			throw std::runtime_error("The assignment statement has an invalid format");
+
+		auto separator_position = command.find(ASSIGNMENT);
+		std::string left_part = command.substr(0, separator_position);
+		std::string right_part = command.substr(separator_position + ASSIGNMENT.length());
+
+		trim(left_part);
+		trim(right_part);
+
+		// TODO: РёСЃРїРѕР»СЊР·РѕРІР°РЅРёРµ substr РїР»РѕС…Рѕ
+
+		// РћР±СЂР°Р±РѕС‚РєР° РёРЅСЃС‚СЂСѓРєС†РёРё РёРЅРєСЂРµРјРµРЅС‚Р°
+		auto operation = right_part.find(PLUS);
+		if (operation != std::string::npos) {
+			std::string left_operand = right_part.substr(0, operation);
+			std::string right_operand = right_part.substr(operation + PLUS.length());
+
+			trim(left_operand);
+			trim(right_operand);
+
+			this->_registers[left_part] = this->get_value(left_operand) + this->get_value(right_operand);
+
+			return;
+		}
+
+		// РћР±СЂР°Р±РѕС‚РєР° РёРЅСЃС‚СЂСѓРєС†РёРё РґРµРєСЂРµРјРµРЅС‚Р°
+		operation = right_part.find(MINUS);
+		if (operation != std::string::npos) {
+			std::string left_operand = right_part.substr(0, operation);
+			std::string right_operand = right_part.substr(operation + MINUS.length());
+
+			trim(left_operand);
+			trim(right_operand);
+
+			this->_registers[left_part] = std::max(0, this->get_value(left_operand) - this->get_value(right_operand));
+
+			return;
+		}
+
+		// РћР±СЂР°Р±РѕС‚РєР° РёРЅСЃС‚СЂСѓРєС†РёРё РїСЂРёСЃРІР°РёРІР°РЅРёСЏ (РєРѕРїРёСЂРѕРІР°РЅРёСЏ)
+		this->_registers[left_part] = this->get_value(right_part);
+
+		return;
+	}
+
+	// Р’С‹РїРѕР»РЅРµРЅРёРµ СѓСЃР»РѕРІРЅРѕР№ РёРЅСЃС‚СЂСѓРєС†РёРё 
+	void basic_register_machine::execute_condition_instruction(const std::string& command) {
+		if (!this->is_valid_condition_instruction(command))
+			throw std::runtime_error("The conditional construct has an invalid format");
+
+		auto if_position = command.find(IF);
+		auto then_position = command.find(THEN);
+		auto else_position = command.find(ELSE);
+		auto goto1_position = command.find(GOTO, if_position);
+		auto goto2_position = command.find(GOTO, else_position);
+
+		std::string condition = command.substr(if_position + IF.length(), then_position - if_position - std::string(IF).length());
+		std::string true_L = command.substr(goto1_position + GOTO.length(), else_position - goto1_position - std::string(GOTO).length());
+		std::string false_L = command.substr(goto2_position + GOTO.length());
+
+		trim(condition);
+		trim(true_L);
+		trim(false_L);
+
+		auto equal_position = condition.find(EQUAL);
+
+		std::string left_part = condition.substr(0, equal_position);
+		std::string right_part = condition.substr(equal_position + EQUAL.length());
+
+		trim(left_part);
+		trim(right_part);
+
+		if (right_part != "0") throw std::invalid_argument(""); //TODO: РѕСЃС‚Р°Р»СЊРЅС‹Рµ РїСЂРѕРІРµСЂРєРё
+
+		if (this->_registers[left_part] == 0) this->_carriage = std::stoi(true_L);
+		else this->_carriage = std::stoi(false_L);
+	}
+
+	// Р’С‹РїРѕР»РЅРµРЅРёРµ РѕСЃС‚Р°РЅРѕРІРѕС‡РЅРѕР№ РёРЅСЃС‚СЂСѓРєС†РёРё
+	void basic_register_machine::execute_stop_instruction(const std::string& command) {
+		if (!this->is_valid_stop_instruction(command))
+			throw std::runtime_error("The stop instruction is in an invalid format");
+
+		this->_carriage = 0;
+	}
+
+	// РџР°СЂСЃРёРЅРі РІС…РѕРґРЅС‹С… СЂРµРіРёСЃС‚СЂРѕРІ
+	void basic_register_machine::parse_input_registers(const std::string& line) {
+		if (!this->is_valid_input_registers_line(line))
+			throw std::runtime_error("The line does not contain input registers");
+
+		std::string variable;
+		std::istringstream iss(line);
+		while (iss >> variable)
+			this->_input_registers.push_back(variable);
+	}
+
+	// РџР°СЂСЃРёРЅРі РІС‹С…РѕРґРЅС‹С… СЂРµРіРёСЃС‚СЂРѕРІ
+	void basic_register_machine::parse_output_registers(const std::string& line) {
+		std::string variable;
+		std::istringstream iss(line);
+		while (iss >> variable)
+			this->_output_registers.push_back(variable);
+	}
+
+	// РџРѕР»СѓС‡Р°РµС‚ С†РµР»РѕС‡РёСЃР»РµРЅРЅРѕРµ Р·РЅР°С‡РµРЅРёРµ РёР· СЃС‚СЂРѕРєРё, РІ РєРѕС‚РѕСЂРѕР№ РјРѕР¶РµС‚ Р±С‹С‚СЊ РѕРїРёСЃР°РЅРё Р»РёС‚РµСЂР°Р» РёР»Рё СЂРµРіРёСЃС‚СЂ
+	int basic_register_machine::get_value(const std::string& line) {
+		if (std::all_of(line.begin(), line.end(), ::isdigit)) return std::stoi(line);
+		if (is_register(line)) return this->_registers[line];
+		throw std::runtime_error("");
+	}
+
+	// Р РµР°Р»РёР·Р°С†РёСЏ СЂР°СЃС€РёСЂРµРЅРЅРѕР№ Р Рњ
+
+	// РљРѕРЅСЃС‚СЂСѓРєС‚РѕСЂ
+	extended_register_machine::extended_register_machine(const std::string& filename, bool is_verbose) noexcept : basic_register_machine(filename, is_verbose), _file_stack() {}
+
+	// РћРїРµСЂР°С‚РѕСЂ РїСЂРёСЃРІР°РёРІР°РЅРёСЏ
+	extended_register_machine& extended_register_machine::operator=(const extended_register_machine& other) noexcept {
+		if (this != &other) { // РџСЂРѕРІРµСЂРєР° РЅР° СЃР°РјРѕРїСЂРёСЃРІР°РёРІР°РЅРёРµ
+			basic_register_machine::operator=(other);
+			_file_stack = other._file_stack;
+		}
+		return *this;
+	}
+	// Move-РѕРїРµСЂР°С‚РѕСЂ РїСЂРёСЃРІР°РёРІР°РЅРёСЏ
+	extended_register_machine& extended_register_machine::operator=(extended_register_machine&& other) noexcept {
+		basic_register_machine::operator=(other);
+		_file_stack = std::move(other._file_stack);
+		return *this;
+	}
+
+	// Р—Р°РїСѓСЃРє Р Рњ
+	void extended_register_machine::run() {
+		this->_include_files(_filename); // РћР±СЂР°Р±Р°С‚С‹РІР°РµРј РёСЃС…РѕРґРЅС‹Р№ С„Р°Р№Р»
+		while (!this->_file_stack.empty()) {
+			auto [file, flag] = this->_file_stack.top(); // РџРѕР»СѓС‡Р°РµРј РІРµСЂС…РЅРёР№ С„Р°Р№Р» Рё С„Р»Р°Рі (РѕР±СЂР°Р±РѕС‚Р°РЅ РёР»Рё РЅРµС‚)
+			this->_file_stack.pop();
+
+			if (!flag)
+				this->_include_files(file); // РћР±СЂР°Р±Р°С‚С‹РІР°РµРј РІРµСЂС…РЅРёР№ С„Р°Р№Р»
+			else {
+				std::vector<int> results{}; // Р’РµРєС‚РѕСЂ РїСЂРѕРјРµР¶СѓС‚РѕС‡РЅС‹С… СЂРµР·СѓР»СЊС‚Р°С‚РѕРІ
+				for (const auto& x : this->_output_registers)
+					results.push_back(this->_registers[x]);
+
+				// РћР±РЅРѕРІР»РµРЅРёРµ СЃРѕСЃС‚РѕСЏРЅРёСЏ Р Рњ РїРµСЂРµРґ РЅРѕРІС‹Рј Р·Р°РїСѓСЃРєРѕРј
+				this->reset();
+				this->_filename = file;
+				this->load_all_instructions();
+
+				if (results.size() > 0) { // Р•СЃР»Рё РµСЃС‚СЊ СЃРѕС…СЂР°РЅС‘РЅРЅС‹Рµ СЂРµР·СѓР»СЊС‚Р°С‚С‹, РїРµСЂРµРґР°РµРј РёС… РІРѕ РІС…РѕРґРЅС‹Рµ СЂРµРіРёСЃС‚СЂС‹
+					size_t index{ 0 };
+					for (const auto& x : this->_input_registers) {
+						this->_registers[x] = results[index];
+						++index;
+					}
+				}
+				else { // Р•СЃР»Рё СЂРµР·СѓР»СЊС‚Р°С‚РѕРІ РЅРµС‚ (РїРµСЂРІС‹Р№ Р·Р°РїСѓСЃРє), Р·Р°РїСЂР°С€РёРІР°РµРј Р·РЅР°С‡РµРЅРёСЏ РґР»СЏ РІС…РѕРґРЅС‹С… СЂРµРіРёСЃС‚СЂРѕРІ Сѓ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ
+					for (const auto& x : this->_input_registers) {
+						std::cout << "Р’РІРµРґРёС‚Рµ Р·РЅР°С‡РµРЅРёСЏ РґР»СЏ " << x << ": ";
+						std::cin >> this->_registers[x];
+					}
+				}
+
+				std::cout << this->_filename << std::endl;
+
+				this->execute_all_instructions(); // Р’С‹РїРѕР»РЅРµРЅРёРµ РІРµСЂС…РЅРµРіРѕ С„Р°Р№Р»Р°
+			}
+		}
+		this->print_output_registers(" "); // РџРѕСЃР»Рµ РІС‹РїРѕР»РЅРµРЅРёСЏ РІСЃРµС… С„Р°Р№Р»РѕРІ РІС‹РІРѕРґРёРј Р·РЅР°С‡РµРЅРёСЏ РІС‹С…РѕРґРЅС‹С… СЂРµРіРёСЃС‚СЂРѕРІ
+	}
+
+	// Р—Р°РіСЂСѓР·РєР° РІСЃРµС… РєРѕРјР°РЅРґ
+	void extended_register_machine::load_all_instructions() {
+		std::ifstream ifs(this->_filename);
+		std::string line;
+
+		if (!ifs) // Р’С‹Р±СЂРѕСЃ РёСЃРєР»СЋС‡РµРЅРёСЏ, РµСЃР»Рё С„Р°Р№Р» РЅРµ РЅР°Р№РґРµРЅ
+			throw std::runtime_error("Error processing file");
+
+
+		while (std::getline(ifs, line) && line.find(COMPOSITION) != std::string::npos); // РљРѕРјР°РЅРґР° РєРѕРјРїРѕР·РёС†РёРё РЅРµ СЏРІР»СЏРµС‚СЃСЏ РёРЅСЃС‚СЂСѓРєС†РёРµР№, РїРѕСЌС‚РѕРјСѓ РїСЂРѕРїСѓСЃРєР°РµРј РµС‘
+
+		// РћР±СЂР°Р±РѕС‚РєР° РІС…РѕРґРЅС‹С… СЂРµРіРёСЃС‚СЂРѕРІ
+		this->parse_input_registers(line);
+
+		// РџРѕСЃР»РµРґСѓСЋС‰РёРµ СЃС‚СЂРѕРєРё, Р·Р° РёСЃРєР»СЋС‡РµРЅРёРµРј РїРѕСЃР»РµРґРЅРµР№, СЃРѕРґРµСЂР¶Р°С‚ РјРµС‚РєРё
+
+		size_t expected_number{ 0 };
+		while (std::getline(ifs, line)) {
+			auto separator_position = line.find(SEPARATOR);
+			if (separator_position == std::string::npos)
+				break;
+
+			std::string number = line.substr(0, separator_position);
+			std::string instruction = line.substr(separator_position + SEPARATOR.length());
+
+			trim(instruction);
+			trim(number);
+
+			if (std::stoi(number) != expected_number)
+				throw std::invalid_argument("The instructions are not written in sequence");
+
+			this->_instructions.push_back(instruction);
+			++expected_number;
+		}
+
+		// Р’ РїРѕСЃР»РµРґРЅРµР№ СЃС‚СЂРѕРєРµ РѕРїРёСЃС‹РІР°СЋС‚СЃСЏ РІС‹С…РѕРґРЅС‹Рµ СЂРµРіРёСЃС‚СЂС‹
+		this->parse_output_registers(line);
+
+		// РџСЂРѕРІРµСЂРєР°, С‡С‚Рѕ РїРѕСЃР»Рµ РІС‹С…РѕРґРЅС‹С… Р°СЂРіСѓРјРµРЅС‚РѕРІ РЅРёС‡РµРіРѕ РЅРµС‚
+		if (std::getline(ifs, line))
+			throw std::invalid_argument("Unexpected data after output registers");
+	}
+
+	// Р’С‹РїРѕР»РЅРµРЅРёРµ РІСЃРµС… РєРѕРјР°РЅРґ
+	void extended_register_machine::execute_all_instructions() {
+
+		while (true) {
+			const auto& current_instruction = this->_instructions[this->_carriage];
+
+			// Р’С‹РІРѕРґ С‚РµРєСѓС‰РµРіРѕ СЃРѕСЃС‚РѕСЏРЅРёСЏ Р Рњ
+			if (this->_is_verbose) {
+				this->println_all_registers(" ");
+				std::cout << this->_carriage << ": " << current_instruction << std::endl;
+			}
+
+			// РћРїСЂРµРґРµР»РµРЅРёРµ С‚РёРїР° РёРЅСЃС‚СЂСѓРєС†РёРё
+			if (current_instruction.find(MOVE) != std::string::npos) {
+				this->execute_move_instruction(current_instruction);
+				++this->_carriage;
+				continue;
+			}
+
+			if (current_instruction.find(ASSIGNMENT) != std::string::npos) {
+				this->execute_assigment_instruction(current_instruction);
+				++this->_carriage;
+				continue;
+			}
+
+			if (current_instruction.find(IF) != std::string::npos) {
+				this->execute_condition_instruction(current_instruction);
+				continue;
+			}
+
+			if (current_instruction.find(GOTO) != std::string::npos) {
+				this->execute_goto_instruction(current_instruction);
+				continue;
+			}
+
+			if (current_instruction.find(STOP) != std::string::npos) { // Р Рњ Р·Р°РІРµСЂС€Р°РµС‚ СЃРІРѕСЋ СЂР°Р±РѕС‚Сѓ С‚РѕР»СЊРєРѕ РїРѕ РґРѕСЃС‚РёР¶РµРЅРёСЋ РѕСЃС‚Р°РЅРѕРІРѕС‡РЅРѕР№ РёРЅСЃС‚СЂСѓРєС†РёРё
+				this->execute_stop_instruction(current_instruction);
+				break;
+			}
+
+			throw std::runtime_error("The label contains an unknown instruction");
+		}
+	}
+
+	void extended_register_machine::execute_assigment_instruction(const std::string& command) {
+		if (!this->is_valid_assignment_instruction(command))
+			throw std::runtime_error("The assignment statement has an invalid format");
+
+		auto separator_position = command.find(ASSIGNMENT);
+		std::string left_part = command.substr(0, separator_position);
+		std::string right_part = command.substr(separator_position + ASSIGNMENT.length());
+
+		trim(left_part);
+		trim(right_part);
+
+		// РћР±СЂР°Р±РѕС‚РєР° РёРЅСЃС‚СЂСѓРєС†РёРё РёРЅРєСЂРµРјРµРЅС‚Р°
+		auto operation = right_part.find(PLUS);
+		if (operation != std::string::npos) {
+			std::string left_operand = right_part.substr(0, operation);
+			std::string right_operand = right_part.substr(operation + PLUS.length());
+
+			trim(left_operand);
+			trim(right_operand);
+
+			this->_registers[left_part] = this->get_value(left_operand) + this->get_value(right_operand);
+
+			return;
+		}
+
+		// РћР±СЂР°Р±РѕС‚РєР° РёРЅСЃС‚СЂСѓРєС†РёРё РґРµРєСЂРµРјРµРЅС‚Р°
+		operation = right_part.find(MINUS);
+		if (operation != std::string::npos) {
+			std::string left_operand = right_part.substr(0, operation);
+			std::string right_operand = right_part.substr(operation + MINUS.length());
+
+			trim(left_operand);
+			trim(right_operand);
+
+			this->_registers[left_part] = std::max(0, this->get_value(left_operand) - this->get_value(right_operand));
+
+			return;
+		}
+
+		// РћР±СЂР°Р±РѕС‚РєР° РёРЅСЃС‚СЂСѓРєС†РёРё РїСЂРёСЃРІР°РёРІР°РЅРёСЏ (РєРѕРїРёСЂРѕРІР°РЅРёРёСЏ)
+		this->_registers[left_part] = this->get_value(right_part);
+
+		return;
+	}
+
+	void extended_register_machine::execute_condition_instruction(const std::string& command) {
+		if (!this->is_valid_condition_instruction(command))
+			throw std::runtime_error("The conditional construct has an invalid format");
+
+		auto if_position = command.find(IF);
+		auto then_position = command.find(THEN);
+		auto else_position = command.find(ELSE);
+		auto goto1_position = command.find(GOTO, if_position);
+		auto goto2_position = command.find(GOTO, else_position);
+
+		std::string condition = command.substr(if_position + IF.length(), then_position - if_position - std::string(IF).length());
+		std::string true_L = command.substr(goto1_position + GOTO.length(), else_position - goto1_position - std::string(GOTO).length());
+		std::string false_L = command.substr(goto2_position + GOTO.length());
+
+		trim(condition);
+		trim(true_L);
+		trim(false_L);
+
+		auto equal_position = condition.find(EQUAL);
+
+		std::string left_part = condition.substr(0, equal_position);
+		std::string right_part = condition.substr(equal_position + EQUAL.length());
+
+		trim(left_part);
+		trim(right_part);
+
+		if (is_register(right_part)) {
+			if (this->_registers[left_part] == this->_registers[right_part]) this->_carriage = std::stoi(true_L);
+			else this->_carriage = std::stoi(false_L);
 		}
 		else {
-
-			std::vector<int> results{};
-			for (const auto& x : this->_output_registers)
-				results.push_back(this->_registers[x]);
-
-			this->reset();
-
-			this->_filename = file;
-			this->load_all_instructions();
-
-			if (results.size() > 0) {
-				size_t index{ 0 };
-				for (const auto& x : this->_input_registers) {
-					this->_registers[x] = results[index];
-					++index;
-				}
-			}
-			else {
-				for (const auto& x : this->_input_registers) {
-					std::cout << "Введите значения для " << x << ": ";
-					std::cin >> this->_registers[x];
-				}
-			}
-			this->execute_all_instructions();
-			// Передача аргументов в РМ (возможно пустых для первого запуска)
-			// Выполнение этой регистровой машины
-			// Сохранение результата
-			// Очищение РМ
+			if (this->_registers[left_part] == std::stoi(right_part)) this->_carriage = std::stoi(true_L);
+			else this->_carriage = std::stoi(false_L);
 		}
 	}
-	this->print_output_registers(" ");
-}
-
-// Загрузка всех команд
-void basic_register_machine::load_all_instructions() {
-	std::ifstream ifs(this->_filename);
-	std::string line;
-
-	// Первая строка содержит аргументы, разделённые пробелами
-	if (std::getline(ifs, line))
-		parse_input_arguments(line);
-
-	// Последующие строки, за исключением последней, содержат метки
-
-	size_t expected_number{ 0 };
-	while (std::getline(ifs, line)) {
-		auto separator_position = line.find(SEPARATOR);
-		if (separator_position == std::string::npos) break;
-		
-		std::string number = line.substr(0, separator_position);
-		std::string instruction = line.substr(separator_position + SEPARATOR.length());
-		trim(instruction);
-
-		if (std::stoi(number) != expected_number)
-			throw std::invalid_argument("The instructions are not written in sequence");
-
-		this->_instructions.push_back(instruction);
-		++expected_number;
-	}
-
-	// В последней строке описываются выходные регистры
-	std::getline(ifs, line);
-	this->parse_output_arguments(line);
-
-	// Проверка, что после выходных аргументов ничего нет
-	if (std::getline(ifs, line))
-		throw std::invalid_argument("Unexpected data after output registers");
-}
-
-// Загрузка всех команд
-void extended_register_machine::load_all_instructions() {
-	std::ifstream ifs(this->_filename);
-	std::string line;
-
-	while (std::getline(ifs, line) && line.find(COMPOSITION) != std::string::npos); // Команда композиции не является инструкцией, поэтому пропускаем её
-
-	// Обработка аргументов
-	parse_input_arguments(line);
-
-	// Последующие строки, за исключением последней, содержат метки
-
-	size_t expected_number{ 0 };
-	while (std::getline(ifs, line)) {
-		auto separator_position = line.find(SEPARATOR);
-		if (separator_position == std::string::npos) break;
-
-		std::string number = line.substr(0, separator_position);
-		std::string instruction = line.substr(separator_position + SEPARATOR.length());
-		trim(instruction);
-
-		if (std::stoi(number) != expected_number)
-			throw std::invalid_argument("The instructions are not written in sequence");
-
-		this->_instructions.emplace_back(instruction);
-		++expected_number;
-	}
-
-	// В последней строке описываются выходные регистры
-	std::getline(ifs, line);
-	this->parse_output_arguments(line);
-
-	// Проверка, что после выходных аргументов ничего нет
-	if (std::getline(ifs, line))
-		throw std::invalid_argument("Unexpected data after output registers");
-}
-
-void basic_register_machine::print_carriage(const std::string& separator) const {
-	std::cout << "carriage: " << this->_carriage << separator;
-}
-
-// Выполнение всех команд
-void basic_register_machine::execute_all_instructions() {
-	while (true) {
-		const auto& command = this->_instructions[this->_carriage];
-
-		if (this->_is_verbose) {
-			this->print_carriage(" ");
-			this->print_all_registers(" ");
-			std::cout << std::endl;
-			std::cout << this->_carriage << ": " << command << std::endl;
-		}
-
-		// TODO: оператор композиции не реализован
-
-		if (command.find(ASSIGNMENT) != std::string::npos) {
-			this->execute_assigment_instruction(command);
-			++this->_carriage;
-		}
-
-		if (command.find(IF) != std::string::npos)
-			this->execute_condition_instruction(command);
-
-		if (command.find(STOP) != std::string::npos) { // РМ завершает свою работу только по достижению остановочной инструкции
-			this->execute_stop_instruction(command);
-			break;
-		}
-	}
-}
-
-// Выполнение всех команд
-void extended_register_machine::execute_all_instructions() {
-
-	while (true) {
-		const auto& instruction = this->_instructions[this->_carriage];
-
-		if (this->_is_verbose) {
-			this->print_all_registers(" ");
-			std::cout << std::endl;
-			std::cout << this->_carriage << ": " << instruction << std::endl;
-		}
-
-		if (instruction.find(MOVE) != std::string::npos) {
-			this->execute_move_command(instruction);
-			++this->_carriage;
-			continue;
-		}
-
-		if (instruction.find(ASSIGNMENT) != std::string::npos) {
-			this->execute_assigment_instruction(instruction);
-			++this->_carriage;
-			continue;
-		}
-
-		if (instruction.find(IF) != std::string::npos) {
-			this->execute_condition_instruction(instruction);
-			continue;
-		}
-
-		if (instruction.find(GOTO) != std::string::npos) {
-			this->execute_goto_command(instruction);
-			continue;
-		}
-
-		if (instruction.find(STOP) != std::string::npos) { // РМ завершает свою работу только по достижению остановочной инструкции
-			this->execute_stop_instruction(instruction);
-			break;
-		}
-	}
-}
-
-void extended_register_machine::execute_goto_command(const std::string& command) {
-	if (!is_valid_goto_command(command))
-		throw std::runtime_error("The goto statement has an invalid format");
-
-	auto goto_position = command.find(GOTO);
-	auto L = command.substr(goto_position + GOTO.length());
-
-	trim(L);
-	this->_carriage = std::stoi(L);
-}
-
-bool extended_register_machine::is_valid_goto_command(const std::string& command) const {
-	std::string pattern{ R"(^\s*goto\s+(\w+)\s*$)" }; // TODO: не используются макросы
-	std::regex regex{ pattern };
-	return std::regex_match(command, regex);
-}
-
-void extended_register_machine::execute_move_command(const std::string& command) {
-	if (!this->is_valid_move_command(command))
-		throw std::runtime_error("The assignment statement has an invalid format");
-
-	auto separator_position = command.find(MOVE);
-	std::string left_part = command.substr(0, separator_position);
-	std::string right_part = command.substr(separator_position + MOVE.length());
-
-	trim(left_part);
-	trim(right_part);
-
-	if (!is_variable(right_part) || !is_variable(left_part))
-		throw std::runtime_error("");
-
-	this->_registers[left_part] = this->_registers[right_part];
-	this->_registers[right_part] = 0;
-
-	return;
-}
-
-void basic_register_machine::print_all_registers(const std::string& separator) const {
-	for (const auto& [reg, val] : this->_registers) std::cout << reg << ": " << val << separator;
-}
-
-// Печать входных регистров
-void basic_register_machine::print_input_registers(const std::string& separator) const {
-	for (const auto& reg : this->_input_registers) std::cout << reg << ": " << this->_registers.at(reg) << separator;
-}
-
-// Проверка корректности формата перемещающей команды
-bool extended_register_machine::is_valid_move_command(const std::string& command) const {
-	std::string pattern{ R"(^\s*(\w+)\s*<<-\s*(\w+)\s*$)"}; // TODO: не используются макросы
-	std::regex regex{ pattern };
-	return std::regex_match(command, regex);
-}
-
-// Печать выходных регистров
-void basic_register_machine::print_output_registers(const std::string& separator) const {
-	for (const auto& x : this->_output_registers)
-		std::cout << x << ": " << this->_registers.at(x) << separator;
-}
-
-// Проверка корректности условной инструкции
-bool basic_register_machine::is_valid_condition_instruction(const std::string& command) const {
-	std::string pattern{ R"(^\s*if\s+(\w+)\s*==\s*0\s+then\s+goto\s+(\d+)\s+else\s+goto\s+(\d+)\s*$)" }; // TODO: не используются макросы
-	std::regex regex{ pattern };
-	return std::regex_match(command, regex);
-}
-
-// Проверка корректности условной инструкции
-bool extended_register_machine::is_valid_condition_instruction(const std::string& command) const {
-	std::string pattern{ R"(^\s*if\s+(\w+)\s*==\s*(\w+|\d+)\s+then\s+goto\s+(\d+)\s+else\s+goto\s+(\d+)\s*$)" }; // TODO: не используются макросы
-	std::regex regex{ pattern };
-	return std::regex_match(command, regex);
-}
-
-// Проверка корректности инструкции присваивания
-bool basic_register_machine::is_valid_assignment_instruction(const std::string& command) const {
-	std::string pattern{ R"(^\s*(\w+)\s*<-\s*(?:(\d+)|\1\s*([+\-])\s*1|1\s*([+\-])\s*\1)\s*$)" };
-	std::regex regex{ pattern };
-	return std::regex_match(command, regex);
-}
-
-// Проверка корректности условной инструкции
-bool extended_register_machine::is_valid_assignment_instruction(const std::string& command) const {
-	std::string pattern{ R"(^\s*(\w+)\s*<-\s*(?:(\d+)|(\w+)\s*([+\-])\s*(\d+|\w+)|(\d+|\w+)\s*([+\-])\s*(\w+)|(\w+))\s*$)" }; // TODO: не используются макросы
-	std::regex regex{ pattern };
-	return std::regex_match(command, regex);
-}
 
 
-// Проверка корректности формата остановочной команды
-bool basic_register_machine::is_valid_stop_instruction(const std::string& command) const {
-	std::string pattern{ R"(^stop$)" };  // TODO: не используются макросы
-	std::regex regex{ pattern };
-	return std::regex_match(command, regex);
-}
+	// Р’С‹РїРѕР»РЅРµРЅРёРµ РёРЅСЃС‚СЂСѓРєС†РёРё РїРµСЂРµРјРµС‰РµРЅРёСЏ
+	void extended_register_machine::execute_move_instruction(const std::string& command) {
+		if (!this->is_valid_move_instruction(command))
+			throw std::runtime_error("The assignment statement has an invalid format");
 
-// Парсинг аргументов
-void basic_register_machine::parse_input_arguments(const std::string& line) {
-	std::string variable;
-	std::istringstream iss(line);
-	while (iss >> variable) 
-		this->_input_registers.push_back(variable);
-}
+		auto separator_position = command.find(MOVE);
+		std::string left_part = command.substr(0, separator_position);
+		std::string right_part = command.substr(separator_position + MOVE.length());
 
-// Парсинг результатов (выходных регистров)
-void basic_register_machine::parse_output_arguments(const std::string& line) {
-	std::string variable;
-	std::istringstream iss(line);
-	while (iss >> variable)
-		this->_output_registers.push_back(variable);
-}
+		trim(left_part);
+		trim(right_part);
 
-// Выполнение инструкции присваивания
-void basic_register_machine::execute_assigment_instruction(const std::string& command) {
-	if (!this->is_valid_assignment_instruction(command))
-		throw std::runtime_error("The assignment statement has an invalid format");
+		if (!is_register(right_part) || !is_register(left_part))
+			throw std::runtime_error("");
 
-	auto separator_position = command.find(ASSIGNMENT);
-	std::string left_part = command.substr(0, separator_position);
-	std::string right_part = command.substr(separator_position + ASSIGNMENT.length());
-
-	trim(left_part);
-	trim(right_part);
-
-	// Обработка инструкции вида L: x <- x + 1 или L: x <- 1 + x
-	auto operation = right_part.find(PLUS);
-	if (operation != std::string::npos) {
-		std::string left_operand = right_part.substr(0, operation);
-		std::string right_operand = right_part.substr(operation + PLUS.length());
-
-		trim(left_operand);
-		trim(right_operand);
-
-		this->_registers[left_part] = this->get_value(left_operand) + this->get_value(right_operand);
+		this->_registers[left_part] = this->_registers[right_part];
+		this->_registers[right_part] = 0;
 
 		return;
 	}
 
-	// Обработка инструкции вида L: x <- x - 1 или L: x <- 1 - x
-	operation = right_part.find(MINUS);
-	if (operation != std::string::npos) {
-		std::string left_operand = right_part.substr(0, operation);
-		std::string right_operand = right_part.substr(operation + MINUS.length());
+	// Р’С‹РїРѕР»РЅРµРЅРёРµ РёРЅСЃС‚СЂСѓРєС†РёРё РїРµСЂРµРґРІРёР¶РµРЅРёСЏ
+	void extended_register_machine::execute_goto_instruction(const std::string& command) {
+		if (!is_valid_goto_instruction(command))
+			throw std::runtime_error("The goto statement has an invalid format");
 
-		trim(left_operand);
-		trim(right_operand);
+		auto goto_position = command.find(GOTO);
+		auto L = command.substr(goto_position + GOTO.length());
 
-		this->_registers[left_part] = std::max(0, this->get_value(left_operand) - this->get_value(right_operand));
-
-		return;
+		trim(L);
+		this->_carriage = std::stoi(L);
 	}
 
-	// Обработка инструкции вида L: x <- a, где a - положительное целое число
-	this->_registers[left_part] = this->get_value(right_part);
-
-	return;
-}
-
-int basic_register_machine::get_value(const std::string& line) { // TODO: const модификатор
-	if (std::all_of(line.begin(), line.end(), ::isdigit)) return std::stoi(line);
-	if (this->is_variable(line)) return this->_registers[line];
-	throw std::runtime_error("");
-}
-
-void extended_register_machine::execute_assigment_instruction(const std::string& command) {
-	if (!this->is_valid_assignment_instruction(command))
-		throw std::runtime_error("The assignment statement has an invalid format");
-
-	auto separator_position = command.find(ASSIGNMENT);
-	std::string left_part = command.substr(0, separator_position);
-	std::string right_part = command.substr(separator_position + ASSIGNMENT.length());
-
-	trim(left_part);
-	trim(right_part);
-
-	// Обработка инструкции вида L: x <- x + 1 или L: x <- 1 + x
-	auto operation = right_part.find(PLUS);
-	if (operation != std::string::npos) {
-		std::string left_operand = right_part.substr(0, operation);
-		std::string right_operand = right_part.substr(operation + PLUS.length());
-
-		trim(left_operand);
-		trim(right_operand);
-
-		this->_registers[left_part] = this->get_value(left_operand) + this->get_value(right_operand);
-
-		return;
+	// РџСЂРѕРІРµСЂРєР° РєРѕСЂСЂРµРєС‚РЅРѕСЃС‚Рё С„РѕСЂРјР°С‚Р° СѓСЃР»РѕРІРЅРѕР№ РёРЅСЃС‚СЂСѓРєС†РёРё
+	bool extended_register_machine::is_valid_condition_instruction(const std::string& command) const noexcept {
+		std::string pattern{ R"(^\s*if\s+(\w+)\s*==\s*(\w+|\d+)\s+then\s+goto\s+(\d+)\s+else\s+goto\s+(\d+)\s*$)" }; // TODO: РЅРµ РёСЃРїРѕР»СЊР·СѓСЋС‚СЃСЏ РјР°РєСЂРѕСЃС‹
+		std::regex regex{ pattern };
+		return std::regex_match(command, regex);
 	}
 
-	// Обработка инструкции вида L: x <- x - 1 или L: x <- 1 - x
-	operation = right_part.find(MINUS);
-	if (operation != std::string::npos) {
-		std::string left_operand = right_part.substr(0, operation);
-		std::string right_operand = right_part.substr(operation + MINUS.length());
-
-		trim(left_operand);
-		trim(right_operand);
-
-		this->_registers[left_part] = std::max(0, this->get_value(left_operand) - this->get_value(right_operand));
-
-		return;
+	// РџСЂРѕРІРµСЂРєР° РєРѕСЂСЂРµРєС‚РЅРѕСЃС‚Рё С„РѕСЂРјР°С‚Р° РёРЅСЃС‚СЂСѓРєС†РёРё РїСЂРёСЃРІР°РёРІР°РЅРёСЏ
+	bool extended_register_machine::is_valid_assignment_instruction(const std::string& command) const noexcept {
+		std::string pattern{ R"(^\s*(\w+)\s*<-\s*(?:(\d+)|(\w+)\s*([+\-])\s*(\d+|\w+)|(\d+|\w+)\s*([+\-])\s*(\w+)|(\w+))\s*$)" }; // TODO: РЅРµ РёСЃРїРѕР»СЊР·СѓСЋС‚СЃСЏ РјР°РєСЂРѕСЃС‹
+		std::regex regex{ pattern };
+		return std::regex_match(command, regex);
 	}
 
-	this->_registers[left_part] = this->get_value(right_part);
-
-	return;
-}
-
-// Выполнение условной инструкции 
-void basic_register_machine::execute_condition_instruction(const std::string& command) {
-	if (!this->is_valid_condition_instruction(command))
-		throw std::runtime_error("The conditional construct has an invalid format");
-
-	auto if_position = command.find(IF);
-	auto then_position = command.find(THEN);
-	auto else_position = command.find(ELSE);
-	auto goto1_position = command.find(GOTO, if_position);
-	auto goto2_position = command.find(GOTO, else_position);
-	
-	std::string condition = command.substr(if_position + IF.length(), then_position - if_position - std::string(IF).length());
-	std::string true_L = command.substr(goto1_position + GOTO.length(), else_position - goto1_position - std::string(GOTO).length());
-	std::string false_L = command.substr(goto2_position + GOTO.length());
-
-	trim(condition);
-	trim(true_L);
-	trim(false_L);
-
-	auto equal_position = condition.find(EQUAL);
-
-	std::string left_part = condition.substr(0, equal_position);
-	std::string right_part = condition.substr(equal_position + EQUAL.length());
-
-	trim(left_part);
-	trim(right_part);
-
-	if (right_part != "0") throw std::invalid_argument(""); //TODO: остальные проверки
-
-	if (this->_registers[left_part] == 0) this->_carriage = std::stoi(true_L);
-	else this->_carriage = std::stoi(false_L);
-}
-
-void extended_register_machine::execute_condition_instruction(const std::string& command) {
-	if (!this->is_valid_condition_instruction(command))
-		throw std::runtime_error("The conditional construct has an invalid format");
-
-	auto if_position = command.find(IF);
-	auto then_position = command.find(THEN);
-	auto else_position = command.find(ELSE);
-	auto goto1_position = command.find(GOTO, if_position);
-	auto goto2_position = command.find(GOTO, else_position);
-
-	std::string condition = command.substr(if_position + IF.length(), then_position - if_position - std::string(IF).length());
-	std::string true_L = command.substr(goto1_position + GOTO.length(), else_position - goto1_position - std::string(GOTO).length());
-	std::string false_L = command.substr(goto2_position + GOTO.length());
-
-	trim(condition);
-	trim(true_L);
-	trim(false_L);
-
-	auto equal_position = condition.find(EQUAL);
-
-	std::string left_part = condition.substr(0, equal_position);
-	std::string right_part = condition.substr(equal_position + EQUAL.length());
-
-	trim(left_part);
-	trim(right_part);
-
-	if (this->is_variable(right_part)) {
-		if (this->_registers[left_part] == this->_registers[right_part]) this->_carriage = std::stoi(true_L);
-		else this->_carriage = std::stoi(false_L);
+	// РџСЂРѕРІРµСЂРєР° РєРѕСЂСЂРµРєС‚РЅРѕСЃС‚Рё С„РѕСЂРјР°С‚Р° РёРЅСЃС‚СЂСѓРєС†РёРё РїРµСЂРµРјРµС‰РµРЅРёСЏ
+	bool extended_register_machine::is_valid_move_instruction(const std::string& command) const noexcept {
+		std::string pattern{ R"(^\s*(\w+)\s*)"s + MOVE + R"(\s*(\w+)\s*$)"};
+		std::regex regex{ pattern };
+		return std::regex_match(command, regex);
 	}
-	else {
-		if (this->_registers[left_part] == std::stoi(right_part)) this->_carriage = std::stoi(true_L);
-		else this->_carriage = std::stoi(false_L);
-	}
-}
-
-// Выполнение остановочной инструкции
-void basic_register_machine::execute_stop_instruction(const std::string& command) {
-	if (!this->is_valid_stop_instruction(command))
-		throw std::runtime_error("The stop instruction is in an invalid format");
-
-	this->_carriage = 0;
-}
-
-// Удаление лишних пробелов слева и справа от строки
-void trim(std::string& line) {
-	size_t start = line.find_first_not_of(" \t\r\n");
-	size_t end = line.find_last_not_of(" \t\r\n");
-	if (start == std::string::npos) line = "";
-	else line = line.substr(start, end - start + 1);
-}
-
-bool basic_register_machine::is_variable(const std::string& line) const {
-	if (line.empty()) return false;
-
-	if (!std::isalpha(line[0])) return false; // Первый символ регистра должен быть буквой
-
-	for (size_t i{ 1 }; i < line.size(); ++i) // Остальные символы регистра могут быть буквами или цифрами
-		if (!std::isalnum(line[i])) return false;
-
-	return true;
-}
-
-// Оператор присваивания
-basic_register_machine& basic_register_machine::operator=(const basic_register_machine& other) noexcept {
-	if (this != &other) {
-		this->_carriage = other._carriage;
-		this->_registers = other._registers;
-		this->_instructions = other._instructions;
-		this->_output_registers = other._output_registers;
-		this->_filename = other._filename;
-		this->_is_verbose = other._is_verbose;
+	// РџСЂРѕРІРµСЂРєР° РєРѕСЂСЂРµРєС‚РЅРѕСЃС‚Рё С„РѕСЂРјР°С‚Р° РёРЅСЃС‚СЂСѓРєС†РёРё РїРµСЂРµРґРІРёР¶РµРЅРёСЏ
+	bool extended_register_machine::is_valid_goto_instruction(const std::string& command) const noexcept {
+		std::string pattern{ R"(^\s*)"s + GOTO + R"(\s+(\w+)\s*$)"};
+		std::regex regex{ pattern };
+		return std::regex_match(command, regex);
 	}
 
-	return *this;
-}
-// Оператор move-присваивания
-basic_register_machine& basic_register_machine::operator=(basic_register_machine&& other) noexcept {
-	this->_carriage = std::move(other._carriage);
-	this->_registers = std::move(other._registers);
-	this->_instructions = std::move(other._instructions);
-	this->_output_registers = std::move(other._output_registers);
-	this->_filename = std::move(other._filename);
-	this->_is_verbose = std::move(other._is_verbose);
-	return *this;
+	// РћР±СЂР°Р±РѕС‚РєР° РІСЃРµС… РєРѕРјР°РЅРґ РєРѕРјРїРѕР·РёС†РёРё РІ С‚РµРєСѓС‰РµРј С„Р°Р№Р»Р° Рё РґРѕР±Р°РІР»РµРЅРёРµ РІРєР»СЋС‡Р°РµРјС‹С… С„Р°Р№Р»РѕРІ РІ СЃС‚РµРє
+	void extended_register_machine::_include_files(const std::string& filename) {
+		std::ifstream ifs(filename);
+		std::string line;
+		std::vector<std::string> filenames;
+
+		_file_stack.push({ filename, true });
+
+		while (std::getline(ifs, line)) {
+			auto composition_position = line.find(COMPOSITION);
+			if (composition_position == std::string::npos) break;
+
+			auto filename = line.substr(composition_position + COMPOSITION.length()); // РџРѕР»СѓС‡РµРЅРёРµ РёРјРµРЅРё РІРєР»СЋС‡Р°РµРјРѕРіРѕ С„Р°Р№Р»Р°
+
+			trim(filename);
+
+			filenames.push_back(filename);
+		}
+
+		for (auto it = filenames.rbegin(); it != filenames.rend(); ++it)
+			_file_stack.push({ *it, false });
+	}
 }

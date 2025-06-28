@@ -1,15 +1,15 @@
-#ifndef __REGISTER_MACHINE_
+п»ї#ifndef __REGISTER_MACHINE_
 #define __REGISTER_MACHINE_
 
+#include <regex>
+#include <stack>
 #include <string>
 #include <unordered_map>
 #include <vector>
-#include <regex>
-#include <stack>
 
 using namespace std::string_literals;
 
-// Макросы ключевых слов РМ
+// РњР°РєСЂРѕСЃС‹ РєР»СЋС‡РµРІС‹С… СЃР»РѕРІ Р Рњ
 
 #define SEPARATOR ":"s
 #define ASSIGNMENT "<-"s
@@ -25,131 +25,158 @@ using namespace std::string_literals;
 #define RESET "reset"s
 #define COMPOSITION "call"s
 
-// Удаление лишних пробелов слева и справа от строки
-void trim(std::string& line);
+namespace IMD {
 
-// Класс базовой РМ
-class basic_register_machine {
-protected:
-	// Каретка, описывающая номер текущей инструкции
-	size_t _carriage;
+	// РЈРґР°Р»РµРЅРёРµ Р»РёС€РЅРёС… РїСЂРѕР±РµР»РѕРІ СЃР»РµРІР° Рё СЃРїСЂР°РІР° РѕС‚ СЃС‚СЂРѕРєРё
+	void trim(std::string& line);
 
-	// Словарь регистров
-	std::unordered_map<std::string, int> _registers;
+	// РџСЂРѕРІРµСЂРєР°, С‡С‚Рѕ РІ СЃС‚СЂРѕРєРµ Р·Р°РїРёСЃР°РЅ СЂРµРіРёСЃС‚СЂ
+	bool is_register(const std::string& line) noexcept;
 
-	// Вектор инструкций
-	std::vector<std::string> _instructions;
+	// РљР»Р°СЃСЃ Р±Р°Р·РѕРІРѕР№ Р Рњ
+	class basic_register_machine {
+	protected:
+		// РљР°СЂРµС‚РєР°, РѕРїРёСЃС‹РІР°СЋС‰Р°СЏ РЅРѕРјРµСЂ С‚РµРєСѓС‰РµР№ РёРЅСЃС‚СЂСѓРєС†РёРё
+		size_t _carriage;
 
-	// Вектор выходных регистров
-	std::vector<std::string> _output_registers;
+		// РЎР»РѕРІР°СЂСЊ СЂРµРіРёСЃС‚СЂРѕРІ
+		std::unordered_map<std::string, int> _registers;
 
-	// Вектор входных регистров
-	std::vector<std::string> _input_registers;
+		// Р’РµРєС‚РѕСЂ РёРЅСЃС‚СЂСѓРєС†РёР№
+		std::vector<std::string> _instructions;
 
-	// Имя обрабатываемого файла
-	std::string _filename;
+		// Р’РµРєС‚РѕСЂ РІС‹С…РѕРґРЅС‹С… СЂРµРіРёСЃС‚СЂРѕРІ
+		std::vector<std::string> _output_registers;
 
-	// Флаг, указывающий режим подробного вывода работы РМ
-	bool _is_verbose;
+		// Р’РµРєС‚РѕСЂ РІС…РѕРґРЅС‹С… СЂРµРіРёСЃС‚СЂРѕРІ
+		std::vector<std::string> _input_registers;
 
-public:
-	// Конструктор
-	basic_register_machine(const std::string& filename, bool is_verbose = false) noexcept : _filename(filename), _is_verbose(is_verbose), _carriage(0), _registers(), _instructions(), _output_registers() {}
-	// Move-Конструктор
-	basic_register_machine(std::string&& filename, bool is_verbose = false) noexcept : _filename(std::move(filename)), _is_verbose(is_verbose), _carriage(0), _registers(), _instructions(), _output_registers() {}
-	
-	// Деструктор
-	virtual ~basic_register_machine() = default;
+		// РРјСЏ РѕР±СЂР°Р±Р°С‚С‹РІР°РµРјРѕРіРѕ С„Р°Р№Р»Р°
+		std::string _filename;
 
-	// Оператор присваивания
-	basic_register_machine& operator=(const basic_register_machine& other) noexcept;
-	// Move-оператор присваивания
-	basic_register_machine& operator=(basic_register_machine&& other) noexcept;
+		// Р¤Р»Р°Рі, СѓРєР°Р·С‹РІР°СЋС‰РёР№ СЂРµР¶РёРј РїРѕРґСЂРѕР±РЅРѕРіРѕ РІС‹РІРѕРґР° СЂР°Р±РѕС‚С‹ Р Рњ
+		bool _is_verbose;
 
-	// Запуск РМ
-	virtual void run();
-	// Сброс РМ
-	virtual void reset();
+	public:
+		// РљРѕРЅСЃС‚СЂСѓРєС‚РѕСЂ
+		basic_register_machine(const std::string& filename, bool is_verbose = false) noexcept;
 
-	// Печать входных регистров
-	void print_input_registers(const std::string& separator) const;
-	// Печать всех регистров
-	void print_all_registers(const std::string& separator) const;
-	// Печать выходных регистров
-	void print_output_registers(const std::string& separator) const;
-	// Печать каретки
-	void print_carriage(const std::string& separator) const;
+		// Р”РµСЃС‚СЂСѓРєС‚РѕСЂ
+		virtual ~basic_register_machine() = default;
 
-protected:
-	// Загрузка всех команд
-	virtual void load_all_instructions();
-	// Выполнение всех инструкций
-	virtual void execute_all_instructions();
+		// РћРїРµСЂР°С‚РѕСЂ РїСЂРёСЃРІР°РёРІР°РЅРёСЏ
+		basic_register_machine& operator=(const basic_register_machine& other) noexcept;
+		// Move-РѕРїРµСЂР°С‚РѕСЂ РїСЂРёСЃРІР°РёРІР°РЅРёСЏ
+		basic_register_machine& operator=(basic_register_machine&& other) noexcept;
 
-	// Проверка корректности формата условной инструкции
-	virtual bool is_valid_condition_instruction(const std::string& command) const;
-	// Проверка корректности формата инструкции присваивания
-	virtual bool is_valid_assignment_instruction(const std::string& command) const;
-	// Проверка корректности формата остановочной команды
-	virtual bool is_valid_stop_instruction(const std::string& command) const;
+		// Р—Р°РїСѓСЃРє Р Рњ
+		virtual void run();
+		// РЎР±СЂРѕСЃ Р Рњ
+		virtual void reset();
 
-	// Выполнение инструкции присваивания
-	virtual void execute_assigment_instruction(const std::string& command);
-	// Выполнение условной инструкции
-	virtual void execute_condition_instruction(const std::string& command);
-	// Выполнение остановочной инструкции
-	virtual void execute_stop_instruction(const std::string& command);
+		// РџРµС‡Р°С‚СЊ РІС…РѕРґРЅС‹С… СЂРµРіРёСЃС‚СЂРѕРІ Р±РµР· РїРµСЂРµС…РѕРґР° РЅР° РЅРѕРІСѓСЋ СЃС‚СЂРѕРєСѓ
+		void print_input_registers(const std::string& separator = " ") const noexcept;
+		// РџРµС‡Р°С‚СЊ РІС…РѕРґРЅС‹С… СЂРµРіРёСЃС‚СЂРѕРІ СЃ РїРµСЂРµС…РѕРґРѕРј РЅР° РЅРѕРІСѓСЋ СЃС‚СЂРѕРєСѓ
+		void println_input_registers(const std::string& separator = " ") const noexcept;
 
-	// Парсинг аргументов
-	void parse_input_arguments(const std::string& line);
-	// Парсинг результатов (выходных регистров)
-	void parse_output_arguments(const std::string& line);
+		// РџРµС‡Р°С‚СЊ РІСЃРµС… СЂРµРіРёСЃС‚СЂРѕРІ Р±РµР· РїРµСЂРµС…РѕРґР° РЅР° РЅРѕРІСѓСЋ СЃС‚СЂРѕРєСѓ
+		void print_all_registers(const std::string& separator = " ") const noexcept;
+		// РџРµС‡Р°С‚СЊ РІСЃРµС… СЂРµРіРёСЃС‚СЂРѕРІ СЃ РїРµСЂРµС…РѕРґРѕРј РЅР° РЅРѕРІСѓСЋ СЃС‚СЂРѕРєСѓ
+		void println_all_registers(const std::string& separator = " ") const noexcept;
 
-	// Проверка, что в строке записана переменная
-	bool is_variable(const std::string& line) const; // TODO: задать стандарт именования переменной
+		// РџРµС‡Р°С‚СЊ РІС‹С…РѕРґРЅС‹С… СЂРµРіРёСЃС‚СЂРѕРІ Р±РµР· РїРµСЂРµС…РѕРґР° РЅР° РЅРѕРІСѓСЋ СЃС‚СЂРѕРєСѓ
+		void print_output_registers(const std::string& separator = " ") const noexcept;
+		// РџРµС‡Р°С‚СЊ РІС‹С…РѕРґРЅС‹С… СЂРµРіРёСЃС‚СЂРѕРІ СЃ РїРµСЂРµС…РѕРґРѕРј РЅР° РЅРѕРІСѓСЋ СЃС‚СЂРѕРєСѓ
+		void println_output_registers(const std::string& separator = " ") const noexcept;
 
-	// Получает целочисленное значение из строки, в которой может быть описани литерал или регистр
-	int get_value(const std::string& line);
-};
+		// РџРµС‡Р°С‚СЊ РєР°СЂРµС‚РєРё Р±РµР· РїРµСЂРµС…РѕРґР° РЅР° РЅРѕРІСѓСЋ СЃС‚СЂРѕРєСѓ
+		void print_carriage(const std::string& separator = " ") const noexcept;
+		// РџРµС‡Р°С‚СЊ РєР°СЂРµС‚РєРё СЃ РїРµСЂРµС…РѕРґРѕРј РЅР° РЅРѕРІСѓСЋ СЃС‚СЂРѕРєСѓ
+		void println_carriage(const std::string& separator = " ") const noexcept;
 
-// Класс расширенной РМ
-class extended_register_machine : public basic_register_machine {
-protected:
-	// Стек для управления порядком обработки файлов РМ: пара <имя файла, флаг обработки всех COMPOSITION>
-	std::stack<std::pair<std::string, bool>> _file_stack;
+	protected:
+		// Р—Р°РіСЂСѓР·РєР° РІСЃРµС… РёРЅСЃС‚СЂСѓРєС†РёР№
+		virtual void load_all_instructions();
+		// Р’С‹РїРѕР»РЅРµРЅРёРµ РІСЃРµС… РёРЅСЃС‚СЂСѓРєС†РёР№
+		virtual void execute_all_instructions();
 
-public:
-	// Конструктор
-	extended_register_machine(const std::string& filename, bool is_verbose = false) : basic_register_machine(filename, is_verbose) {}
-	// Move-конструктор
-	extended_register_machine(std::string&& filename, bool is_verbose = false) : basic_register_machine(filename, is_verbose) {}
+		// РџСЂРѕРІРµСЂРєР° РєРѕСЂСЂРµРєС‚РЅРѕСЃС‚Рё С„РѕСЂРјР°С‚Р° СѓСЃР»РѕРІРЅРѕР№ РёРЅСЃС‚СЂСѓРєС†РёРё
+		virtual bool is_valid_condition_instruction(const std::string& instruction) const noexcept;
+		// РџСЂРѕРІРµСЂРєР° РєРѕСЂСЂРµРєС‚РЅРѕСЃС‚Рё С„РѕСЂРјР°С‚Р° РёРЅСЃС‚СЂСѓРєС†РёРё РїСЂРёСЃРІР°РёРІР°РЅРёСЏ
+		virtual bool is_valid_assignment_instruction(const std::string& instruction) const noexcept;
+		// РџСЂРѕРІРµСЂРєР° РєРѕСЂСЂРµРєС‚РЅРѕСЃС‚Рё С„РѕСЂРјР°С‚Р° РѕСЃС‚Р°РЅРѕРІРѕС‡РЅРѕР№ РєРѕРјР°РЅРґС‹
+		virtual bool is_valid_stop_instruction(const std::string& instruction) const noexcept;
+		// РџСЂРѕРІРµСЂРєР° РєРѕСЂСЂРµРєС‚РЅРѕСЃС‚Рё С„РѕСЂРјР°С‚Р° СЃС‚СЂРѕРєРё СЃ РІС…РѕРґРЅС‹РјРё СЂРµРіРёСЃС‚СЂР°РјРё
+		virtual bool is_valid_input_registers_line(const std::string& instruction) const noexcept;
 
-	// Деструктор
-	~extended_register_machine() = default;
+		// Р’С‹РїРѕР»РЅРµРЅРёРµ РёРЅСЃС‚СЂСѓРєС†РёРё РїСЂРёСЃРІР°РёРІР°РЅРёСЏ
+		virtual void execute_assigment_instruction(const std::string& instruction);
+		// Р’С‹РїРѕР»РЅРµРЅРёРµ СѓСЃР»РѕРІРЅРѕР№ РёРЅСЃС‚СЂСѓРєС†РёРё
+		virtual void execute_condition_instruction(const std::string& instruction);
+		// Р’С‹РїРѕР»РЅРµРЅРёРµ РѕСЃС‚Р°РЅРѕРІРѕС‡РЅРѕР№ РёРЅСЃС‚СЂСѓРєС†РёРё
+		virtual void execute_stop_instruction(const std::string& instruction);
 
-	// Запуск РМ
-	void run() override;
+		// РџР°СЂСЃРёРЅРі Р°СЂРіСѓРјРµРЅС‚РѕРІ
+		void parse_input_registers(const std::string& line);
+		// РџР°СЂСЃРёРЅРі СЂРµР·СѓР»СЊС‚Р°С‚РѕРІ (РІС‹С…РѕРґРЅС‹С… СЂРµРіРёСЃС‚СЂРѕРІ)
+		void parse_output_registers(const std::string& line);
 
-protected:
-	// Выполнение всех инструкций
-	void execute_all_instructions() override;
-	void load_all_instructions() override;
+		// РџРѕР»СѓС‡Р°РµС‚ С†РµР»РѕС‡РёСЃР»РµРЅРЅРѕРµ Р·РЅР°С‡РµРЅРёРµ РёР· СЃС‚СЂРѕРєРё, РІ РєРѕС‚РѕСЂРѕР№ РјРѕР¶РµС‚ Р±С‹С‚СЊ РѕРїРёСЃР°РЅРё Р»РёС‚РµСЂР°Р» РёР»Рё СЂРµРіРёСЃС‚СЂ
+		int get_value(const std::string& line);
+	};
 
-	void execute_assigment_instruction(const std::string& command) override;
-	void execute_condition_instruction(const std::string& command) override;
+	// РљР»Р°СЃСЃ СЂР°СЃС€РёСЂРµРЅРЅРѕР№ Р Рњ
+	class extended_register_machine : public basic_register_machine {
+	protected:
+		// РЎС‚РµРє РґР»СЏ СѓРїСЂР°РІР»РµРЅРёСЏ РїРѕСЂСЏРґРєРѕРј РѕР±СЂР°Р±РѕС‚РєРё С„Р°Р№Р»РѕРІ Р Рњ: РїР°СЂР° <РёРјСЏ С„Р°Р№Р»Р°, С„Р»Р°Рі РѕР±СЂР°Р±РѕС‚РєРё РІСЃРµС… COMPOSITION>
+		std::stack<std::pair<std::string, bool>> _file_stack;
 
-	void execute_move_command(const std::string& command);
-	void execute_goto_command(const std::string& command);
+	public:
+		// РљРѕРЅСЃС‚СЂСѓРєС‚РѕСЂ
+		extended_register_machine(const std::string& filename, bool is_verbose = false) noexcept;
 
-	// Проверка корректности формата перемещающей команды
-	bool is_valid_move_command(const std::string& command) const;
-	bool is_valid_goto_command(const std::string& command) const;
+		// Р”РµСЃС‚СЂСѓРєС‚РѕСЂ
+		~extended_register_machine() = default;
 
-	bool is_valid_condition_instruction(const std::string& command) const override;
-	bool is_valid_assignment_instruction(const std::string& command) const override;
+		// РћРїРµСЂР°С‚РѕСЂ РїСЂРёСЃРІР°РёРІР°РЅРёСЏ
+		extended_register_machine& operator=(const extended_register_machine& other) noexcept;
+		// Move-РѕРїРµСЂР°С‚РѕСЂ РїСЂРёСЃРІР°РёРІР°РЅРёСЏ
+		extended_register_machine& operator=(extended_register_machine&& other) noexcept;
 
-	void _include_files(const std::string& filename);
-};
+		// Р—Р°РїСѓСЃРє Р Рњ
+		void run() override;
 
+	protected:
+		// Р—Р°РіСЂСѓР·РєР° РІСЃРµС… РёРЅСЃС‚СЂСѓРєС†РёР№
+		void load_all_instructions() override;
+
+		// Р’С‹РїРѕР»РЅРµРЅРёРµ РІСЃРµС… РёРЅСЃС‚СЂСѓРєС†РёР№
+		void execute_all_instructions() override;
+		
+		// Р’С‹РїРѕР»РЅРµРЅРёРµ РёРЅСЃС‚СЂСѓРєС†РёРё РїСЂРёСЃРІР°РёРІР°РЅРёСЏ
+		void execute_assigment_instruction(const std::string& command) override;
+		// Р’С‹РїРѕР»РЅРµРЅРёРµ СѓСЃР»РѕРІРЅРѕР№ РёРЅСЃС‚СЂСѓРєС†РёРё
+		void execute_condition_instruction(const std::string& command) override;
+
+		// Р’С‹РїРѕР»РЅРµРЅРёРµ РёРЅСЃС‚СЂСѓРєС†РёРё РїРµСЂРµРјРµС‰РµРЅРёСЏ
+		void execute_move_instruction(const std::string& command);
+		// Р’С‹РїРѕР»РЅРµРЅРёРµ РёРЅСЃС‚СЂСѓРєС†РёРё РїРµСЂРµРґРІРёР¶РµРЅРёСЏ
+		void execute_goto_instruction(const std::string& command);
+
+		// РџСЂРѕРІРµСЂРєР° РєРѕСЂСЂРµРєС‚РЅРѕСЃС‚Рё С„РѕСЂРјР°С‚Р° СѓСЃР»РѕРІРЅРѕР№ РёРЅСЃС‚СЂСѓРєС†РёРё
+		bool is_valid_condition_instruction(const std::string& instruction) const noexcept override;
+		// РџСЂРѕРІРµСЂРєР° РєРѕСЂСЂРµРєС‚РЅРѕСЃС‚Рё С„РѕСЂРјР°С‚Р° РёРЅСЃС‚СЂСѓРєС†РёРё РїСЂРёСЃРІР°РёРІР°РЅРёСЏ
+		bool is_valid_assignment_instruction(const std::string& instruction) const noexcept override;
+
+
+		// РџСЂРѕРІРµСЂРєР° РєРѕСЂСЂРµРєС‚РЅРѕСЃС‚Рё С„РѕСЂРјР°С‚Р° РёРЅСЃС‚СЂСѓРєС†РёРё РїРµСЂРµРјРµС‰РµРЅРёСЏ
+		bool is_valid_move_instruction(const std::string& instruction) const noexcept;
+		// РџСЂРѕРІРµСЂРєР° РєРѕСЂСЂРµРєС‚РЅРѕСЃС‚Рё С„РѕСЂРјР°С‚Р° РёРЅСЃС‚СЂСѓРєС†РёРё РїРµСЂРµРґРІРёР¶РµРЅРёСЏ
+		bool is_valid_goto_instruction(const std::string& instruction) const noexcept;
+
+		// РћР±СЂР°Р±РѕС‚РєР° РІСЃРµС… РєРѕРјР°РЅРґ РєРѕРјРїРѕР·РёС†РёРё РІ С‚РµРєСѓС‰РµРј С„Р°Р№Р»Р° Рё РґРѕР±Р°РІР»РµРЅРёРµ РІРєР»СЋС‡Р°РµРјС‹С… С„Р°Р№Р»РѕРІ РІ СЃС‚РµРє
+		void _include_files(const std::string& filename);
+	};
+}
 
 #endif
