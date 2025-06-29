@@ -14,7 +14,7 @@ using namespace std::string_literals;
 
 #define SEPARATOR ":"s
 #define COPY "<-"s
-#define MOVE "<<-"s
+#define MOVE "~!"s
 #define PLUS "+"s
 #define MINUS "-"s
 #define STOP "stop"s
@@ -81,18 +81,19 @@ namespace IMD {
 
 	// Класс условной инструкции
 	class condition_instruction : public instruction {
-		std::string _register_name;
+	protected:
+		std::string _compared_register;
 		size_t _goto_true;
 		size_t _goto_false;
 	public:
 		// Конструктор
-		condition_instruction(basic_register_machine& rm, const std::string& reg, size_t goto_true, size_t goto_false) noexcept;
+		condition_instruction(basic_register_machine& rm, const std::string& compared_register, size_t goto_true, size_t goto_false) noexcept;
 
 		// Деструктор
 		~condition_instruction() override = default;
 
 		// Выполнение условной инструкции
-		void execute() override;
+		void execute() noexcept override;
 	};
 
 	// Класс остановочной инструкции
@@ -104,40 +105,45 @@ namespace IMD {
 		~stop_instruction() override = default;
 
 		// Выполнение остановочной инструкции
-		void execute() override;
+		void execute() noexcept override;
 	};
 
-	//// Класс расширенной условной инструкции
-	//class extended_condition_instruction : public condition_instruction {
-	//public:
-	//	// Конструктор
-	//	extended_condition_instruction(basic_register_machine& rm, const std::string& description) noexcept;
-	//	// Деструктор
-	//	~extended_condition_instruction() override = default;
+	// Класс расширенной условной инструкции
+	class extended_condition_instruction : public condition_instruction {
+	protected:
+		size_t _compared_value;
+	public:
+		// Конструктор
+		extended_condition_instruction(basic_register_machine& rm, const std::string& reg, size_t compared_value, size_t goto_true, size_t goto_false) noexcept;
+		// Деструктор
+		~extended_condition_instruction() override = default;
 
-	//	// Выполнение расширенной условной инструкции
-	//	void execute() override;
-	//};
+		// Выполнение расширенной условной инструкции
+		void execute() noexcept override;
+	};
 
 	// Класс инструкции передвижения
 	class goto_instruction : public instruction {
 	private:
-		size_t _goto;
+		size_t _mark;
 	public:
 		// Конструктор
-		goto_instruction(basic_register_machine& rm, size_t _goto) noexcept;
+		goto_instruction(basic_register_machine& rm, size_t mark) noexcept;
 		// Деструктор
 		~goto_instruction() override = default;
 
 		// Выполнение инструкции передвижения
-		void execute() override;
+		void execute() noexcept override;
 	};
 
 	// Класс инструкции перемещающего присваивания
 	class move_assignment_instruction : public instruction {
+	protected:
+		std::string _to_register;
+		std::string _from_register;
 	public:
 		// Конструктор
-		move_assignment_instruction(basic_register_machine& rm) noexcept;
+		move_assignment_instruction(basic_register_machine& rm, const std::string& _to_register, const std::string& _from_register) noexcept;
 		// Деструктор
 		~move_assignment_instruction() override = default;
 
@@ -147,18 +153,19 @@ namespace IMD {
 
 
 	enum class token_type {
-		variable,
-		literal,
-		keyword_if,
-		keyword_then,
-		keyword_else,
-		keyword_goto,
-		operator_copy_assignment,
-		operator_move_assignment,
-		operator_plus,
-		operator_minus,
-		operator_equal,
-		keyword_stop,
+		variable, // Регистр (переменная)
+		literal, // Положительный целый литерал
+		keyword_if, // If
+		keyword_then, // Then
+		keyword_else, // Else
+		keyword_goto, // Goto
+		operator_copy_assignment, // <-
+		operator_move_assignment, // <<-
+		operator_plus, // +
+		operator_minus, // -
+		operator_equal, // ==
+		keyword_stop, // stop
+		keyword_call, // call
 		eof,
 		unknown
 	};
@@ -172,6 +179,9 @@ namespace IMD {
 		friend class stop_instruction;
 		friend class instruction;
 		friend class copy_assignment_instruction;
+		friend class extended_condition_instruction;
+		friend class goto_instruction;
+		friend class move_assignment_instruction;
 
 		class token {
 		private:
@@ -188,7 +198,7 @@ namespace IMD {
 
 		};
 		class basic_lexer {
-		private:
+		protected:
 			// Строка с инструкцией
 			std::string_view _line;
 			// Каретка, описывающая позицию считывания строки с инструкцией
@@ -197,30 +207,29 @@ namespace IMD {
 			// Конструктор
 			basic_lexer(std::string_view line) noexcept;
 
-			std::vector<token> tokenize();
+			virtual std::vector<token> tokenize();
 
-		private:
+		protected:
 			void skip_spaces() noexcept;
 			bool eof() const noexcept;
 
 			// Возвращает следующий токен
-			std::optional<token> next_token();
+			virtual std::optional<token> next_token();
 
 			// Парсинг регистра или ключевого слова
-			token parse_register_or_keyword();
+			virtual token parse_register_or_keyword();
 
 			// Парсинг литерала
-			token parse_literal();
+			virtual token parse_literal();
 
 			// Парсинг оператора копирующего присваивания
-			token parse_operator_copy_assignment();
+			virtual token parse_operator_copy_assignment();
 
 			// Парсинг оператора сравнения на равенство
-			token parse_operator_equal();
+			virtual token parse_operator_equal();
 		};
-
 		class basic_parser {
-		private:
+		protected:
 			std::vector<token> _tokens;
 			size_t _carriage;
 		public:
@@ -230,13 +239,13 @@ namespace IMD {
 			// Возвращает текущий токен
 			const token& preview() const;
 
-			instruction_ptr parse_instruction(basic_register_machine& rm);
+			virtual instruction_ptr parse_instruction(basic_register_machine& rm);
 
-			instruction_ptr parse_stop_instruction(basic_register_machine& rm);
+			virtual instruction_ptr parse_stop_instruction(basic_register_machine& rm);
 
-			instruction_ptr parse_condition_instruction(basic_register_machine& rm);
+			virtual instruction_ptr parse_condition_instruction(basic_register_machine& rm);
 
-			instruction_ptr parse_copy_assignment_instruction(basic_register_machine& rm);
+			virtual instruction_ptr parse_copy_assignment_instruction(basic_register_machine& rm);
 
 			bool is_type_match(const token_type& type) const noexcept;
 
@@ -323,6 +332,30 @@ namespace IMD {
 
 	// Класс расширенной РМ
 	class extended_register_machine : public basic_register_machine {
+	protected:
+
+		class extended_lexer : public basic_lexer {
+		public:
+			// Конструктор
+			explicit extended_lexer(const std::string& line) noexcept;
+
+			// Парсинг оператора копирующего присваивания
+			virtual token parse_operator_move_assignment();
+
+			// 
+			std::optional<token> next_token() override;
+		};
+		class extended_parser : public basic_parser {
+		public:
+			explicit extended_parser(const std::vector<token>& tokens) noexcept;
+
+			instruction_ptr parse_instruction(basic_register_machine& rm) override;
+
+			virtual instruction_ptr parse_move_assignment_instruction(basic_register_machine& rm);
+			virtual instruction_ptr parse_goto_assignment_instruction(basic_register_machine& rm);
+			instruction_ptr parse_copy_assignment_instruction(basic_register_machine& rm) override;
+		};
+
 	protected:
 		// Стек для управления порядком обработки файлов РМ: пара <имя файла, флаг обработки всех COMPOSITION>
 		std::stack<std::pair<std::string, bool>> _file_stack;
