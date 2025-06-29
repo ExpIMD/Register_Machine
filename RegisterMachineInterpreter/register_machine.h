@@ -57,12 +57,12 @@ namespace IMD {
 		};
 
 		// Класс инструкции копирующего присваивания
-		class assigment_instruction : public instruction {
+		class assignment_instruction : public instruction {
 		public:
 			// Конструктор
-			assigment_instruction(const std::string& description, basic_register_machine& rm) noexcept;
+			assignment_instruction(const std::string& description, basic_register_machine& rm) noexcept;
 			// Деструктор
-			~assigment_instruction() override = default;
+			~assignment_instruction() override = default;
 
 			// Выполнение инструкции копирующего присваивания
 			void execute() noexcept override;
@@ -215,10 +215,10 @@ namespace IMD {
 
 	// Класс расширенной РМ
 	class extended_register_machine : public basic_register_machine {
-		friend class assigment_instruction;
+		friend class assignment_instruction;
 		friend class condition_instruction;
 		friend class stop_instruction;
-		friend class expended_condition_instruction;
+		friend class extended_condition_instruction;
 	protected:
 		// Стек для управления порядком обработки файлов РМ: пара <имя файла, флаг обработки всех COMPOSITION>
 		std::stack<std::pair<std::string, bool>> _file_stack;

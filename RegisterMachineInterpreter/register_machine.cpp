@@ -7,8 +7,6 @@
 #include <string>
 
 namespace IMD {
-
-
 	// Реализация вспомогательных методов
 
 	// Удаление лишних пробелов слева и справа от строки
@@ -16,6 +14,13 @@ namespace IMD {
 		line.erase(0, line.find_first_not_of(" \t\r\n"));
 		if (line.empty()) return;
 		line.erase(line.find_last_not_of(" \t\r\n") + 1);
+	}
+
+	std::string_view trim(std::string_view line) {
+		size_t start = line.find_first_not_of(" \t\r\n");
+		if (start == std::string_view::npos) return {};
+		size_t end = line.find_last_not_of(" \t\r\n");
+		return line.substr(start, end - start + 1);
 	}
 
 	// Проверка, что в строке записан регистр
@@ -52,51 +57,47 @@ namespace IMD {
 	}
 
 	// Конструктор
-	basic_register_machine::assigment_instruction::assigment_instruction(const std::string& description, basic_register_machine& rm) noexcept : instruction(description, rm) {}
+	basic_register_machine::assignment_instruction::assignment_instruction(const std::string& description, basic_register_machine& rm) noexcept : instruction(description, rm) {}
 	// Выполнение инструкции копирующего присваивания
-	void basic_register_machine::assigment_instruction::execute() noexcept {
+	void basic_register_machine::assignment_instruction::execute() noexcept {
 
 		++this->_rm._carriage;
 
-		auto separator_position = this->_description.find(ASSIGNMENT);
-		std::string left_part = this->_description.substr(0, separator_position);
-		std::string right_part = this->_description.substr(separator_position + ASSIGNMENT.length());
+		std::string_view desc(this->_description);
+		size_t separator_position = desc.find(ASSIGNMENT);
 
-		trim(left_part);
-		trim(right_part);
+		std::string_view left_part = desc.substr(0, separator_position);
+		std::string_view right_part = desc.substr(separator_position + ASSIGNMENT.length());
+
+		left_part = trim(left_part);
+		right_part = trim(right_part);
 
 		// TODO: использование substr плохо
 
 		// Обработка инструкции инкремента
-		auto operation = right_part.find(PLUS);
-		if (operation != std::string::npos) {
-			std::string left_operand = right_part.substr(0, operation);
-			std::string right_operand = right_part.substr(operation + PLUS.length());
+		size_t operation_position = right_part.find(PLUS);
+		if (operation_position != std::string::npos) {
+			auto left_operand = trim(right_part.substr(0, operation_position));
+			auto right_operand = trim(right_part.substr(operation_position + PLUS.length()));
 
-			trim(left_operand);
-			trim(right_operand);
-
-			this->_rm._registers[left_part] = this->_rm.get_value(left_operand) + this->_rm.get_value(right_operand);
+			this->_rm._registers[std::string(left_part)] = this->_rm.get_value(std::string(left_operand)) + this->_rm.get_value(std::string(right_operand));
 
 			return;
 		}
 
 		// Обработка инструкции декремента
-		operation = right_part.find(MINUS);
-		if (operation != std::string::npos) {
-			std::string left_operand = right_part.substr(0, operation);
-			std::string right_operand = right_part.substr(operation + MINUS.length());
+		operation_position = right_part.find(MINUS);
+		if (operation_position != std::string::npos) {
+			auto left_operand = trim(right_part.substr(0, operation_position));
+			auto right_operand = trim(right_part.substr(operation_position + MINUS.length()));
 
-			trim(left_operand);
-			trim(right_operand);
-
-			this->_rm._registers[left_part] = std::max(0, this->_rm.get_value(left_operand) - this->_rm.get_value(right_operand));
+			this->_rm._registers[std::string(left_part)] = std::max(0, this->_rm.get_value(std::string(left_operand)) - this->_rm.get_value(std::string(right_operand)));
 
 			return;
 		}
 
 		// Обработка инструкции присваивания (копирования)
-		this->_rm._registers[left_part] = this->_rm.get_value(right_part);
+		this->_rm._registers[std::string(left_part)] = this->_rm.get_value(std::string(right_part));
 
 		return;
 	}
@@ -105,30 +106,25 @@ namespace IMD {
 	basic_register_machine::condition_instruction::condition_instruction(const std::string& description, basic_register_machine& rm) noexcept : instruction(description, rm) {}
 	// Выполнение условной инструкции
 	void basic_register_machine::condition_instruction::execute() noexcept {
-		auto if_position = this->_description.find(IF);
-		auto then_position = this->_description.find(THEN);
-		auto else_position = this->_description.find(ELSE);
-		auto goto1_position = this->_description.find(GOTO, if_position);
-		auto goto2_position = this->_description.find(GOTO, else_position);
+		std::string_view desc(this->_description);
 
-		std::string condition = this->_description.substr(if_position + IF.length(), then_position - if_position - std::string(IF).length());
-		std::string true_L = this->_description.substr(goto1_position + GOTO.length(), else_position - goto1_position - std::string(GOTO).length());
-		std::string false_L = this->_description.substr(goto2_position + GOTO.length());
+		auto if_position = desc.find(IF);
+		auto then_position = desc.find(THEN);
+		auto else_position = desc.find(ELSE);
+		auto goto1_position = desc.find(GOTO, if_position);
+		auto goto2_position = desc.find(GOTO, else_position);
 
-		trim(condition);
-		trim(true_L);
-		trim(false_L);
+		auto condition = trim(desc.substr(if_position + IF.length(), then_position - if_position - IF.length()));
+		auto true_L = trim(desc.substr(goto1_position + GOTO.length(), else_position - goto1_position - GOTO.length()));
+		auto false_L = trim(desc.substr(goto2_position + GOTO.length()));
 
 		auto equal_position = condition.find(EQUAL);
+		std::string left_part = std::string(trim(condition.substr(0, equal_position)));
+		std::string right_part = std::string(trim(condition.substr(equal_position + EQUAL.length())));
 
-		std::string left_part = condition.substr(0, equal_position);
-		std::string right_part = condition.substr(equal_position + EQUAL.length());
 
-		trim(left_part);
-		trim(right_part);
-
-		if (this->_rm._registers[left_part] == 0) this->_rm._carriage = std::stoi(true_L);
-		else this->_rm._carriage = std::stoi(false_L);
+		if (this->_rm._registers[left_part] == 0) this->_rm._carriage = std::stoi(std::string(true_L));
+		else this->_rm._carriage = std::stoi(std::string(false_L));
 	}
 	// Конструктор
 	basic_register_machine::stop_instruction::stop_instruction(const std::string& description, basic_register_machine& rm) noexcept : instruction(description, rm) {}
@@ -141,36 +137,25 @@ namespace IMD {
 	basic_register_machine::extended_condition_instruction::extended_condition_instruction(const std::string& description, basic_register_machine& rm) noexcept : condition_instruction(description, rm) {}
 	// Выполнение расширенной условной инструкции
 	void basic_register_machine::extended_condition_instruction::execute() noexcept {
-		auto if_position = this->_description.find(IF);
-		auto then_position = this->_description.find(THEN);
-		auto else_position = this->_description.find(ELSE);
-		auto goto1_position = this->_description.find(GOTO, if_position);
-		auto goto2_position = this->_description.find(GOTO, else_position);
+		std::string_view desc(this->_description);
 
-		std::string condition = this->_description.substr(if_position + IF.length(), then_position - if_position - std::string(IF).length());
-		std::string true_L = this->_description.substr(goto1_position + GOTO.length(), else_position - goto1_position - std::string(GOTO).length());
-		std::string false_L = this->_description.substr(goto2_position + GOTO.length());
+		auto if_position = desc.find(IF);
+		auto then_position = desc.find(THEN);
+		auto else_position = desc.find(ELSE);
+		auto goto1_position = desc.find(GOTO, if_position);
+		auto goto2_position = desc.find(GOTO, else_position);
 
-		trim(condition);
-		trim(true_L);
-		trim(false_L);
+		auto condition = trim(desc.substr(if_position + IF.length(), then_position - if_position - IF.length()));
+		auto true_L = trim(desc.substr(goto1_position + GOTO.length(), else_position - goto1_position - GOTO.length()));
+		auto false_L = trim(desc.substr(goto2_position + GOTO.length()));
 
 		auto equal_position = condition.find(EQUAL);
 
-		std::string left_part = condition.substr(0, equal_position);
-		std::string right_part = condition.substr(equal_position + EQUAL.length());
+		std::string left_part = std::string(trim(condition.substr(0, equal_position)));
+		std::string right_part = std::string(trim(condition.substr(equal_position + EQUAL.length())));
 
-		trim(left_part);
-		trim(right_part);
-
-		if (is_register(right_part)) {
-			if (this->_rm._registers[left_part] == this->_rm._registers[right_part]) this->_rm._carriage = std::stoi(true_L);
-			else this->_rm._carriage = std::stoi(false_L);
-		}
-		else {
-			if (this->_rm._registers[left_part] == std::stoi(right_part)) this->_rm._carriage = std::stoi(true_L);
-			else this->_rm._carriage = std::stoi(false_L);
-		}
+		if (this->_rm._registers[left_part] == this->_rm.get_value(right_part))  this->_rm._carriage = std::stoi(std::string(true_L));
+		else this->_rm._carriage = std::stoi(std::string(false_L));
 	}
 
 	// Конструктор
@@ -234,6 +219,7 @@ namespace IMD {
 		this->_input_registers.resize(0);
 		this->_filename = ""s;
 		this->_is_stopped = false;
+		this->_is_verbose = false;
 	}
 
 	// Печать входных регистров без перехода на новую строку
@@ -259,7 +245,7 @@ namespace IMD {
 	// Печать выходных регистров без перехода на новую строку
 	void basic_register_machine::print_output_registers(const std::string& separator) const noexcept {
 		for (const auto& x : this->_output_registers)
-			std::cout << x << ": " << this->_registers.at(x) << separator; // TODO: ошибка если переменная объявлена только на выходе
+			std::cout << x << ": " << this->_registers.at(x) << separator;
 	}
 	// Печать выходных регистров с переходом на новую строку
 	void basic_register_machine::println_output_registers(const std::string& separator) const noexcept {
@@ -315,7 +301,7 @@ namespace IMD {
 
 			if (this->is_valid_assignment_instruction(instruction)) {
 				++expected_number;
-				this->_instructions.push_back(std::make_unique<assigment_instruction>(instruction, *this));
+				this->_instructions.push_back(std::make_unique<assignment_instruction>(instruction, *this));
 			}
 			else if (this->is_valid_condition_instruction(instruction)) {
 				this->_instructions.push_back(std::make_unique<condition_instruction>(instruction, *this));
@@ -440,10 +426,12 @@ namespace IMD {
 				std::vector<int> results{}; // Вектор промежуточных результатов
 				for (const auto& x : this->_output_registers)
 					results.push_back(this->_registers[x]);
+				auto is_verbose = this->_is_verbose;
 
 				// Обновление состояния РМ перед новым запуском
 				this->reset();
 				this->_filename = file;
+				this->_is_verbose = is_verbose;
 				this->load_all_instructions();
 
 				if (results.size() > 0) { // Если есть сохранённые результаты, передаем их во входные регистры
@@ -515,7 +503,7 @@ namespace IMD {
 
 			if (this->is_valid_assignment_instruction(instruction)) {
 				++expected_number;
-				this->_instructions.push_back(std::make_unique<assigment_instruction>(instruction, *this));
+				this->_instructions.push_back(std::make_unique<assignment_instruction>(instruction, *this));
 			}
 			else if (this->is_valid_condition_instruction(instruction)) {
 				this->_instructions.push_back(std::make_unique<extended_condition_instruction>(instruction, *this));
