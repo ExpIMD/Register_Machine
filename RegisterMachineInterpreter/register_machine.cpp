@@ -739,8 +739,9 @@ namespace IMD {
 	}
 
 	// Загрузка всех команд
-	void basic_register_machine::load_all_instructions() {
+	void basic_register_machine::load_all_instructions(size_t start_position, int border) {
 		std::ifstream ifs(this->_filename);
+		ifs.seekg(start_position, border);
 		std::string line;
 
 		if (!ifs) // Выброс исключения, если файл не найден
@@ -871,7 +872,7 @@ namespace IMD {
 			auto [file, flag] = this->_file_stack.top(); // Получаем верхний файл и флаг (обработан или нет)
 			this->_file_stack.pop();
 
-			if (!flag)
+			if (flag == std::nullopt)
 				this->_include_files(file); // Обрабатываем верхний файл
 			else {
 				std::vector<int> results{}; // Вектор промежуточных результатов
@@ -883,7 +884,7 @@ namespace IMD {
 				this->reset();
 				this->_filename = file;
 				this->_is_verbose = is_verbose;
-				this->load_all_instructions();
+				this->load_all_instructions(flag.value());
 
 				if (results.size() > 0) { // Если есть сохранённые результаты, передаем их во входные регистры
 					if (results.size() < this->_input_registers.size()) // Проверка на соотношение входов и выходов связанных РМ
@@ -912,8 +913,9 @@ namespace IMD {
 	}
 
 	// Загрузка всех команд
-	void extended_register_machine::load_all_instructions() {
+	void extended_register_machine::load_all_instructions(size_t start_position, int border) {
 		std::ifstream ifs(this->_filename);
+		ifs.seekg(start_position, border);
 		std::string line;
 
 		if (!ifs) // Выброс исключения, если файл не найден
@@ -924,8 +926,6 @@ namespace IMD {
 			remove_comment(line);
 
 			if (this->is_valid_input_registers_line(line)) break;
-			if (!this->is_valid_composition_command(line))
-				throw std::runtime_error("The call instruction is error");
 		}
 
 
@@ -968,13 +968,6 @@ namespace IMD {
 
 		// В последней строке описываются выходные регистры
 		this->parse_output_registers(line);
-
-		// Проверка, что после выходных аргументов ничего нет
-		while (std::getline(ifs, line)) {
-			remove_comment(line);
-			if (!line.empty())
-				throw std::invalid_argument("Filename: " + this->_filename + ", unexpected data after output registers");
-		}
 	}
 
 	// Выполнение всех команд
@@ -1003,26 +996,99 @@ namespace IMD {
 
 	// Обработка всех команд композиции в текущем файла и добавление включаемых файлов в стек
 	void extended_register_machine::_include_files(const std::string& filename) {
-		std::ifstream ifs(filename);
+		std::ifstream ifs(filename, std::ios::binary);
 		std::string line;
-		std::vector<std::string> filenames;
+		if (!ifs) return;
 
-		_file_stack.push({ filename, true });
+		// 1. Считаем файл с конца вверх, ищем все строки с COMPOSITION
+		std::vector<std::string> compositions_from_end;
+		bool separator_found = false;
 
-		while (std::getline(ifs, line)) {
-			remove_comment(line);
+		ifs.seekg(0, std::ios::end);
+		auto filesize = ifs.tellg();
 
-			auto composition_position = line.find(COMPOSITION);
-			if (composition_position == std::string::npos) break;
+		size_t buffer_size = 4096;
+		size_t pos = filesize;
+		std::string line_buffer;
 
-			auto filename = line.substr(composition_position + COMPOSITION.length()); // Получение имени включаемого файла
+		while (pos > 0 && !separator_found) {
+			size_t read_size = (pos >= buffer_size) ? buffer_size : pos;
+			pos -= read_size;
+			ifs.seekg(pos);
+			std::vector<char> buf(read_size);
+			ifs.read(buf.data(), read_size);
 
-			trim(filename);
-
-			filenames.push_back(filename);
+			for (int i = read_size - 1; i >= 0; --i) {
+				char c = buf[i];
+				if (c == '\n') {
+					// Обработка строки
+					std::reverse(line_buffer.begin(), line_buffer.end());
+					remove_comment(line_buffer);
+					if (!line_buffer.empty()) {
+						if (line_buffer.find(SEPARATOR) != std::string::npos) {
+							separator_found = true;
+							break;
+						}
+						// Проверка на COMPOSITION
+						if (line_buffer.find(COMPOSITION) != std::string::npos)
+							compositions_from_end.push_back(line_buffer.substr(line_buffer.find(COMPOSITION) + COMPOSITION.length() + 1));
+					}
+					line_buffer.clear();
+				}
+				else {
+					line_buffer.push_back(c);
+				}
+			}
 		}
 
-		for (auto it = filenames.rbegin(); it != filenames.rend(); ++it)
-			_file_stack.push({ *it, false });
+		// Обработка оставшейся строки после цикла
+		if (!line_buffer.empty() && !separator_found) {
+			std::reverse(line_buffer.begin(), line_buffer.end());
+			remove_comment(line_buffer);
+			if (!line_buffer.empty()) {
+				if (line_buffer.find(SEPARATOR) != std::string::npos)
+					separator_found = true;
+				else if (line_buffer.find(COMPOSITION) != std::string::npos)
+					compositions_from_end.push_back(line_buffer);
+			}
+		}
+
+		// Добавляем файлы в стек в обратном порядке
+		for (auto it = compositions_from_end.begin(); it != compositions_from_end.end(); ++it)
+			_file_stack.push({ *it, std::nullopt });
+
+		// 2. Если нашли разделитель, читаем файл с начала вниз и собираем все строки с COMPOSITION
+		if (separator_found) {
+			ifs.clear();
+			ifs.seekg(0, std::ios::beg);
+
+			std::vector<std::string> compositions_from_start;
+
+			auto last_pos = ifs.tellg();
+
+			while (std::getline(ifs, line)) {
+
+				remove_comment(line);
+				if (line.empty()) continue;
+
+				auto composition_position = line.find(COMPOSITION);
+				if (composition_position == std::string::npos)
+					break;
+
+				auto include_filename = line.substr(composition_position + COMPOSITION.length());
+				trim(include_filename);
+
+				compositions_from_start.push_back(include_filename);
+
+				last_pos = ifs.tellg(); // Позиция **после** прочитанной строки
+			}
+
+			// Теперь last_pos указывает на позицию после последней строки с COMPOSITION
+			this->_file_stack.push({ filename, last_pos });
+
+			// Добавляем файлы в стек в обратном порядке
+			for (auto it = compositions_from_start.rbegin(); it != compositions_from_start.rend(); ++it)
+				_file_stack.push({ *it, std::nullopt });
+		}
 	}
 }

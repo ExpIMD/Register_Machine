@@ -1,6 +1,7 @@
 ﻿#ifndef __REGISTER_MACHINE_
 #define __REGISTER_MACHINE_
 
+#include <ios>
 #include <optional>
 #include <regex>
 #include <stack>
@@ -318,7 +319,7 @@ namespace IMD {
 
 	protected:
 		// Загрузка всех инструкций
-		virtual void load_all_instructions();
+		virtual void load_all_instructions(size_t start_position = 0, int border = std::ios::beg);
 		// Выполнение всех инструкций
 		virtual void execute_all_instructions();
 
@@ -361,7 +362,7 @@ namespace IMD {
 
 	protected:
 		// Стек для управления порядком обработки файлов РМ: пара <имя файла, флаг обработки всех COMPOSITION>
-		std::stack<std::pair<std::string, bool>> _file_stack;
+		std::stack<std::pair<std::string, std::optional<size_t>>> _file_stack;
 
 	public:
 		// Конструктор
@@ -379,7 +380,7 @@ namespace IMD {
 
 	protected:
 		// Загрузка всех инструкций
-		void load_all_instructions() override;
+		void load_all_instructions(size_t start_position = 0, int border = std::ios::beg) override;
 
 		// Выполнение всех инструкций
 		void execute_all_instructions() override;
