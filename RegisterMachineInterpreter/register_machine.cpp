@@ -53,17 +53,17 @@ namespace IMD {
 			return this->parse_register_or_keyword();
 		if (std::isdigit(c))
 			return this->parse_literal();
-		if (c == '<') // TODO: МАКРОСЫ
+		if (c == COPY[0]) // Смотрим только по первым символам - плохо...
 			return parse_operator_copy_assignment();
-		if (c == '+') {
+		if (c == PLUS[0]) {
 			++this->_carriage;
 			return token{ token_type::operator_plus, PLUS };
 		}
-		if (c == '-') {
+		if (c == MINUS[0]) {
 			++this->_carriage;
 			return token{ token_type::operator_minus, MINUS };
 		}
-		if (c == '=')
+		if (c == EQUAL[0])
 			return parse_operator_equal();
 
 		return std::nullopt;
@@ -88,8 +88,10 @@ namespace IMD {
 			return { token_type::keyword_goto, text };
 		if (text == STOP)
 			return { token_type::keyword_stop, text };
+		if (is_register(text))
+			return { token_type::variable, text }; // Встречен регистр
 
-		return { token_type::variable, text }; // Встречен регистр
+		return { token_type::unknown, text };
 	}
 
 	// Парсинг литерала
@@ -289,7 +291,7 @@ namespace IMD {
 
 			return std::make_unique<copy_assignment_instruction>(rm,
 				target_token.text(),
-				copy_assignment_instruction::operation::Add,
+				copy_assignment_instruction::operation::plus,
 				left_operand_token.text(),
 				right_operand_token.text());
 		}
@@ -308,7 +310,7 @@ namespace IMD {
 
 			return std::make_unique<copy_assignment_instruction>(rm,
 				target_token.text(),
-				copy_assignment_instruction::operation::Subtract,
+				copy_assignment_instruction::operation::minus,
 				left_operand_token.text(),
 				right_operand_token.text());
 		}
@@ -320,14 +322,14 @@ namespace IMD {
 
 				return std::make_unique<copy_assignment_instruction>(rm,
 					target_token.text(),
-					copy_assignment_instruction::operation::None,
+					copy_assignment_instruction::operation::none,
 					left_operand_token.text(),
 					"");
 			}
 			else if (left_operand_token.type() == token_type::variable) {
 				return std::make_unique<copy_assignment_instruction>(rm,
 					target_token.text(),
-					copy_assignment_instruction::operation::None,
+					copy_assignment_instruction::operation::none,
 					left_operand_token.text(),
 					"");
 			}
@@ -355,17 +357,14 @@ namespace IMD {
 		if (this->eof())
 			throw std::runtime_error("Empty instruction");
 
-		if (this->preview().type() == token_type::keyword_stop) {
+		if (this->preview().type() == token_type::keyword_stop)
 			return parse_stop_instruction(rm);
-		}
-		else if (this->preview().type() == token_type::keyword_if) {
+		else if (this->preview().type() == token_type::keyword_if)
 			return parse_condition_instruction(rm);
-		}
-		else if (this->preview().type() == token_type::variable) {
+		else if (this->preview().type() == token_type::variable)
 			return parse_copy_assignment_instruction(rm);
-		}
 		else
-			throw std::runtime_error("Unknown instruction start");
+			throw std::runtime_error("Unknown instruction start"); // Никогда не сработает, поскольку
 	}
 
 	// Парсинг остановочной инструкции
@@ -483,7 +482,7 @@ namespace IMD {
 
 			return std::make_unique<copy_assignment_instruction>(rm,
 				target_token.text(),
-				copy_assignment_instruction::operation::Add,
+				copy_assignment_instruction::operation::plus,
 				left_operand_token.text(),
 				right_operand_token.text());
 		}
@@ -499,7 +498,7 @@ namespace IMD {
 
 			return std::make_unique<copy_assignment_instruction>(rm,
 				target_token.text(),
-				copy_assignment_instruction::operation::Subtract,
+				copy_assignment_instruction::operation::minus,
 				left_operand_token.text(),
 				right_operand_token.text());
 		}
@@ -514,7 +513,7 @@ namespace IMD {
 
 			return std::make_unique<copy_assignment_instruction>(rm,
 				target_token.text(),
-				copy_assignment_instruction::operation::None,
+				copy_assignment_instruction::operation::none,
 				left_operand_token.text(),
 				"");
 		}
@@ -589,7 +588,7 @@ namespace IMD {
 	// Конструктор
 	copy_assignment_instruction::copy_assignment_instruction(basic_register_machine& rm, const std::string& target_register, const operation& operation, const std::string& left_operand, const std::string& right_operand) noexcept:
 		instruction(rm), _target_register(target_register), _operation(operation), _left_operand(left_operand), _right_operand(right_operand) {
-		this->_description = this->_target_register + " " + COPY + this->_left_operand + " " + (this->_operation == operation::Add ? PLUS : this->_operation == operation::Subtract ? MINUS : " ") + " " + this->_right_operand;
+		this->_description = this->_target_register + " " + COPY + " " + this->_left_operand + " " + (this->_operation == operation::plus ? PLUS : this->_operation == operation::minus ? MINUS : " ") + " " + this->_right_operand;
 	}
 
 	// Выполнение инструкции копирующего присваивания
@@ -600,13 +599,13 @@ namespace IMD {
 		try {
 			int value{ 0 };
 			switch (this->_operation) {
-			case operation::None:
+			case operation::none:
 				value = get_value(this->_rm, _left_operand);
 				break;
-			case operation::Add:
+			case operation::plus:
 				value = get_value(this->_rm, _left_operand) + get_value(this->_rm, _right_operand);
 				break;
-			case operation::Subtract:
+			case operation::minus:
 				value = get_value(this->_rm, _left_operand) - get_value(this->_rm, _right_operand);
 				if (value < 0)
 					value = 0;
@@ -744,18 +743,20 @@ namespace IMD {
 		std::ifstream ifs(this->_filename);
 		std::string line;
 
-		// TODO: проверка формата
-
 		if (!ifs) // Выброс исключения, если файл не найден
 			throw std::runtime_error("Error processing file");
 
-		// Первая строка содержит аргументы, разделённые пробелами
-		if (std::getline(ifs, line)) {
+		// Чтение входных регистров
+		while (std::getline(ifs, line)) {
 			remove_comment(line);
-			this->parse_input_registers(line);
+			if (line.empty()) continue;
+			else {
+				this->parse_input_registers(line);
+				break;
+			}
 		}
 
-		// Последующие строки, за исключением последней, содержат метки
+		// Чтение строк с инструкциями
 		size_t expected_number{ 0 }; // Ожидаемый номер метки
 		while (std::getline(ifs, line)) {
 
@@ -772,7 +773,9 @@ namespace IMD {
 			trim(instruction);
 			trim(number);
 
-			if (number.empty() || std::stoi(number) != expected_number)
+			if (number.empty())
+				throw std::invalid_argument("Filename: " + this->_filename + ", the instructions doesn't have a number");
+			if (std::stoi(number) != expected_number)
 				throw std::invalid_argument("Filename: " + this->_filename + ", the instructions are not written in sequence");
 			try {
 				basic_lexer lexer(instruction);
@@ -788,7 +791,7 @@ namespace IMD {
 			++expected_number;
 		}
 
-		// В последней строке описываются выходные регистры
+		// Чтение выходных регистров
 		this->parse_output_registers(line);
 
 		// Проверка, что после выходных аргументов ничего нет

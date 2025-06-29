@@ -65,7 +65,7 @@ namespace IMD {
 	class copy_assignment_instruction : public instruction {
 	public:
 		friend class parser;
-		enum class operation { None, Add, Subtract };
+		enum class operation { none, plus, minus };
 	protected:
 		std::string _target_register;
 		operation _operation; // Тип присваивания: x <- 2, x <- x + 1, x <- x - 1
