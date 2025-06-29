@@ -581,9 +581,16 @@ namespace IMD {
 	// Конструктор
 	instruction::instruction(basic_register_machine& rm) noexcept: _rm(rm) {}
 
+	// Возвращает описание инструкции
+	const std::string& instruction::description() const noexcept {
+		return this->_description;
+	}
+
 	// Конструктор
 	copy_assignment_instruction::copy_assignment_instruction(basic_register_machine& rm, const std::string& target_register, const operation& operation, const std::string& left_operand, const std::string& right_operand) noexcept:
-		instruction(rm), _target_register(target_register), _operation(operation), _left_operand(left_operand), _right_operand(right_operand) {}
+		instruction(rm), _target_register(target_register), _operation(operation), _left_operand(left_operand), _right_operand(right_operand) {
+		this->_description = this->_target_register + " " + COPY + this->_left_operand + " " + (this->_operation == operation::Add ? PLUS : this->_operation == operation::Subtract ? MINUS : " ") + " " + this->_right_operand;
+	}
 
 	// Выполнение инструкции копирующего присваивания
 	void copy_assignment_instruction::execute() {
@@ -611,22 +618,29 @@ namespace IMD {
 	}
 
 	// Конструктор
-	condition_instruction::condition_instruction(basic_register_machine& rm, const std::string& compared_register, size_t goto_true, size_t goto_false) noexcept:
-		instruction(rm), _compared_register(compared_register), _goto_true(goto_true), _goto_false(goto_false) {}
+	condition_instruction::condition_instruction(basic_register_machine& rm, const std::string& compared_register, size_t goto_true, size_t goto_false) noexcept :
+		instruction(rm), _compared_register(compared_register), _goto_true(goto_true), _goto_false(goto_false) {
+		this->_description = IF + " " + this->_compared_register + " " + EQUAL + " 0 " + THEN + " " + GOTO + " " + std::to_string(this->_goto_true) + " " + ELSE + " " + GOTO + " " + std::to_string(this->_goto_false);
+	}
 	// Выполнение условной инструкции
 	void condition_instruction::execute() noexcept {
 		if (this->_rm._registers[this->_compared_register] == 0) this->_rm._carriage = this->_goto_true;
 		else this->_rm._carriage = this->_goto_false;
 	}
+
 	// Конструктор
-	stop_instruction::stop_instruction(basic_register_machine& rm) noexcept : instruction(rm) {}
+	stop_instruction::stop_instruction(basic_register_machine& rm) noexcept : instruction(rm) {
+		this->_description = STOP;
+	}
 	// Выполнение остановочной инструкции
 	void stop_instruction::execute() noexcept {
 		this->_rm._is_stopped = true;
 	}
 
 	// Конструктор
-	extended_condition_instruction::extended_condition_instruction(basic_register_machine& rm, const std::string& compared_register, size_t compared_value, size_t goto_true, size_t goto_false) noexcept : _compared_value(compared_value), condition_instruction(rm, compared_register, goto_true, goto_false) {}
+	extended_condition_instruction::extended_condition_instruction(basic_register_machine& rm, const std::string& compared_register, size_t compared_value, size_t goto_true, size_t goto_false) noexcept : _compared_value(compared_value), condition_instruction(rm, compared_register, goto_true, goto_false) {
+		this->_description = IF + " " + this->_compared_register + " " + EQUAL + " " + std::to_string(this->_compared_value) + " " + THEN + " " + GOTO + " " + std::to_string(this->_goto_true) + " " + ELSE + " " + GOTO + " " + std::to_string(this->_goto_false);
+	}
 	// Выполнение расширенной условной инструкции
 	void extended_condition_instruction::execute() noexcept {
 		if (this->_rm._registers[this->_compared_register] == _compared_value) this->_rm._carriage = this->_goto_true;
@@ -634,14 +648,18 @@ namespace IMD {
 	}
 
 	// Конструктор
-	goto_instruction::goto_instruction(basic_register_machine& rm, size_t mark) noexcept : instruction(rm), _mark(mark) {}
+	goto_instruction::goto_instruction(basic_register_machine& rm, size_t mark) noexcept : instruction(rm), _mark(mark) {
+		this->_description = GOTO + " " + std::to_string(this->_mark);
+	}
 	// Выполнение инструкции передвижения
 	void goto_instruction::execute() noexcept {
 		this->_rm._carriage = this->_mark;
 	}
 
 	//Конструктор
-	move_assignment_instruction::move_assignment_instruction(basic_register_machine& rm, const std::string& to_register, const std::string& from_register) noexcept : instruction(rm), _to_register(to_register), _from_register(from_register) {}
+	move_assignment_instruction::move_assignment_instruction(basic_register_machine& rm, const std::string& to_register, const std::string& from_register) noexcept : instruction(rm), _to_register(to_register), _from_register(from_register) {
+		this->_description = this->_to_register + " " + MOVE + " " + this->_from_register;
+	}
 	// Выполнение инструкции перемещения
 	void move_assignment_instruction::execute() {
 		++this->_rm._carriage;
@@ -791,7 +809,7 @@ namespace IMD {
 			// Вывод текущего состояния РМ
 			if (this->_is_verbose) {
 				this->println_all_registers();
-				std::cout << this->_carriage << ": " << "..." << std::endl;
+				std::cout << this->_carriage << ": " << this->_instructions[this->_carriage]->description() << std::endl;
 			}
 
 			current_instruction->execute();
@@ -965,7 +983,7 @@ namespace IMD {
 			// Вывод текущего состояния РМ
 			if (this->_is_verbose) {
 				this->println_all_registers(" ");
-				std::cout << this->_carriage << ": " << "..." << std::endl;
+				std::cout << this->_carriage << ": " << this->_instructions[this->_carriage]->description() << std::endl;
 			}
 
 			this->_instructions[this->_carriage]->execute();

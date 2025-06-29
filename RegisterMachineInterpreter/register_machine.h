@@ -46,6 +46,7 @@ namespace IMD {
 	protected:
 		// Регистровая машина
 		basic_register_machine& _rm;
+		std::string _description;
 	public:
 		// Конструктор
 		instruction(basic_register_machine& rm) noexcept;
@@ -54,6 +55,8 @@ namespace IMD {
 
 		// Выполняет инструкцию
 		virtual void execute() = 0;
+		// Возвращает описание инструкции
+		virtual const std::string& description() const noexcept;
 	};
 
 	using instruction_ptr = std::unique_ptr<instruction>;
