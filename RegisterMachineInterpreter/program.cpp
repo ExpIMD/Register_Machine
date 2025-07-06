@@ -6,7 +6,7 @@ int main() {
 	setlocale(LC_ALL, "Russian");
 
 	std::string filename{ "RM1.txt" };
-	IMD::basic_register_machine RM(filename, true);
+	IMD::extended_register_machine RM(filename, true);
 
 	try {
 		RM.run();

@@ -1,3 +1,4 @@
+call RM2.txt
 x y
 0: if x == 0 then goto 4 else goto 1
 1: z <- z + 1 # Заполняем z при помощи x
@@ -10,3 +11,4 @@ x y
 7: if y == 0 then goto 8 else goto 5
 8: stop
 z
+call RM4.txt

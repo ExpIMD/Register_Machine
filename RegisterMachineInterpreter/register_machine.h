@@ -126,14 +126,15 @@ namespace IMD {
 	};
 
 	// Класс инструкции композиции
-	class composition_instruction : public instruction {
+	class composition_command : public instruction {
+		std::string _include_filename;
 	public:
 		// Конструктор
-		composition_instruction() noexcept;
+		composition_command(const std::string& include_filename) noexcept;
 		// Деструктор
-		~composition_instruction() override = default;
+		~composition_command() override = default;
 
-		// Выполнение остановочной инструкции
+		// Выполнение инструкции композиции
 		void execute(basic_register_machine& brm) noexcept override;
 	};
 
@@ -212,6 +213,7 @@ namespace IMD {
 		friend class extended_condition_instruction;
 		friend class goto_instruction;
 		friend class move_assignment_instruction;
+		friend class composition_command;
 
 	protected:
 		// Класс токена
@@ -363,6 +365,8 @@ namespace IMD {
 	class extended_register_machine : public basic_register_machine {
 	protected:
 
+		friend class composition_command;
+
 		// Класс расширенного лексера
 		class extended_lexer : public basic_lexer {
 		public:
@@ -382,6 +386,7 @@ namespace IMD {
 
 			virtual instruction_ptr parse_move_assignment_instruction();
 			virtual instruction_ptr parse_goto_assignment_instruction();
+			virtual instruction_ptr parse_composition_command();
 			instruction_ptr parse_copy_assignment_instruction() override;
 		};
 
@@ -389,7 +394,7 @@ namespace IMD {
 
 	protected:
 		// Стек для управления порядком обработки файлов РМ: пара <имя файла, флаг обработки всех COMPOSITION>
-		std::stack<std::pair<std::string, std::optional<size_t>>> _file_stack;
+		std::stack<std::pair<std::string, std::optional<std::streampos>>> _file_stack;
 
 	public:
 		// Конструктор

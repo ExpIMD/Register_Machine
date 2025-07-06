@@ -90,13 +90,26 @@ namespace IMD {
 	int get_value(const basic_register_machine& brm, const std::string& line) {
 		if (std::all_of(line.begin(), line.end(), ::isdigit))
 			return std::stoi(line);
+
 		if (is_register(line))
 			return brm._registers.at(line);
-		throw std::runtime_error("");
+
+		throw std::runtime_error("The string does not contain a literal or case");
 	}
 
 	// Реализация токена
 
+	// Конструктор
+	composition_command::composition_command(const std::string& include_filename) noexcept : instruction(), _include_filename(include_filename) {}
+
+
+	void composition_command::execute(basic_register_machine& brm) noexcept {
+		auto erm = dynamic_cast<extended_register_machine*>(&brm);
+		if (erm == NULL)
+			throw std::runtime_error("");
+
+		erm->_file_stack.push({ this->_include_filename, std::nullopt });
+	}
 	// Конструктор
 	basic_register_machine::token::token(const token_type& type, const std::string& text) noexcept : _type(type), _text(text) {}
 
@@ -126,7 +139,7 @@ namespace IMD {
 			else
 				throw std::runtime_error("Unknown token at position: " + std::to_string(this->_carriage));
 		}
-		tokens.emplace_back(token_type::eof, "");
+		//tokens.emplace_back(token_type::eof, "");
 		return tokens;
 	}
 
@@ -192,6 +205,7 @@ namespace IMD {
 			return std::nullopt;
 
 		static const std::vector<std::pair<std::string, token_type>> keyword_type_pairs = {
+			{COMPOSITION, token_type::keyword_composition},
 			{COPY, token_type::operator_copy_assignment},
 			{MOVE, token_type::operator_move_assignment},
 			{EQUAL, token_type::operator_equal},
@@ -227,7 +241,7 @@ namespace IMD {
 		else if (is_register(text)) {
 			return token{ token_type::variable, text };
 		}
-		
+
 		return std::nullopt;
 	}
 
@@ -246,6 +260,8 @@ namespace IMD {
 		if (current_type == token_type::unknown)
 			throw std::runtime_error("Unknown instruction start");
 
+		if (current_type == token_type::keyword_composition)
+			return this->parse_composition_command();
 
 		if (current_type == token_type::keyword_stop) {
 			return this->parse_stop_instruction();
@@ -257,6 +273,7 @@ namespace IMD {
 			return this->parse_goto_assignment_instruction();
 		}
 		else if (current_type == token_type::variable) {
+			if (this->_carriage + 1 >= this->_tokens.size()) throw std::runtime_error("Expected assignment operator after register");
 
 			auto next_token = this->_tokens[this->_carriage + 1];
 			if (next_token.type() == token_type::operator_copy_assignment)
@@ -264,11 +281,25 @@ namespace IMD {
 			else if (next_token.type() == token_type::operator_move_assignment) {
 				return this->parse_move_assignment_instruction();
 			}
-			else {
+			else
 				throw std::runtime_error("Expected assignment operator after register");
-			}
 		}
 
+	}
+
+	instruction_ptr extended_register_machine::extended_parser::parse_composition_command() {
+		if (this->_tokens.size() > 2)
+			throw std::runtime_error("An unexpected part of the COMPOSITION command");
+
+		++this->_carriage;
+
+		auto include_filename_token = this->preview();
+		if (include_filename_token.type() == token_type::filename) {
+			auto include_filename = include_filename_token.text();
+			++this->_carriage;
+			return std::make_unique<composition_command>(include_filename_token.text());
+		}
+		throw std::runtime_error("");
 	}
 
 	instruction_ptr extended_register_machine::extended_parser::parse_goto_assignment_instruction() {
@@ -276,14 +307,14 @@ namespace IMD {
 
 		auto number_token = this->preview();
 
-		if (number_token.type() != token_type::literal)
-			throw std::runtime_error("Expected number after '" + GOTO + "'");
+		if (number_token.type() == token_type::literal) {
+			size_t mark = std::stoul(number_token.text());
 
-		size_t mark = std::stoul(number_token.text());
+			++this->_carriage;
 
-		++this->_carriage;
-
-		return std::make_unique<goto_instruction>(mark);
+			return std::make_unique<goto_instruction>(mark);
+		}
+		throw std::runtime_error("Expected number after '" + GOTO + "'");
 
 	}
 
@@ -791,8 +822,8 @@ namespace IMD {
 				basic_lexer lexer(instruction);
 				auto tokens = lexer.tokenize();
 				basic_parser parser(tokens);
-				auto instr_ptr = parser.parse_instruction();
-				this->_instructions.push_back(std::move(instr_ptr));
+				auto instruction_pointer = parser.parse_instruction();
+				this->_instructions.push_back(std::move(instruction_pointer));
 			}
 			catch (const std::exception& e) {
 				throw std::runtime_error("Filename: " + this->_filename + ", invalid instruction at line " + std::to_string(expected_number) + ": " + e.what());
@@ -999,11 +1030,10 @@ namespace IMD {
 	// Обработка всех команд композиции в текущем файла и добавление включаемых файлов в стек
 	void extended_register_machine::_include_files(const std::string& filename) {
 		std::ifstream ifs(filename, std::ios::binary);
-		std::string line;
 		if (!ifs) return;
 
 		// 1. Считаем файл с конца вверх, ищем все строки с COMPOSITION
-		std::vector<std::string> compositions_from_end;
+		std::vector<instruction_ptr> compositions_from_end;
 		bool separator_found = false;
 
 		ifs.seekg(0, std::ios::end);
@@ -1023,7 +1053,6 @@ namespace IMD {
 			for (int i = read_size - 1; i >= 0; --i) {
 				char c = buf[i];
 				if (c == '\n') {
-					// Обработка строки
 					std::reverse(line_buffer.begin(), line_buffer.end());
 					remove_comment(line_buffer);
 					if (!line_buffer.empty()) {
@@ -1031,9 +1060,17 @@ namespace IMD {
 							separator_found = true;
 							break;
 						}
-						// Проверка на COMPOSITION
-						if (line_buffer.find(COMPOSITION) != std::string::npos)
-							compositions_from_end.push_back(line_buffer.substr(line_buffer.find(COMPOSITION) + COMPOSITION.length() + 1));
+						// Лексер и парсер для проверки COMPOSITION
+						try {
+							extended_lexer lexer(line_buffer);
+							auto tokens = lexer.tokenize();
+							extended_parser parser(tokens);
+							auto instr_ptr = parser.parse_instruction();
+							compositions_from_end.push_back(std::move(instr_ptr));
+						}
+						catch (...) {
+							// Игнорируем ошибки, если строка не COMPOSITION
+						}
 					}
 					line_buffer.clear();
 				}
@@ -1050,47 +1087,58 @@ namespace IMD {
 			if (!line_buffer.empty()) {
 				if (line_buffer.find(SEPARATOR) != std::string::npos)
 					separator_found = true;
-				else if (line_buffer.find(COMPOSITION) != std::string::npos)
-					compositions_from_end.push_back(line_buffer);
+				else {
+					try {
+						extended_lexer lexer(line_buffer);
+						auto tokens = lexer.tokenize();
+						extended_parser parser(tokens);
+						auto instr_ptr = parser.parse_instruction();
+						if (!instr_ptr && tokens.size() >= 2) {
+							compositions_from_end.push_back(std::move(instr_ptr));
+						}
+					}
+					catch (...) {}
+				}
 			}
 		}
 
 		// Добавляем файлы в стек в обратном порядке
-		for (auto it = compositions_from_end.begin(); it != compositions_from_end.end(); ++it)
-			_file_stack.push({ *it, std::nullopt });
+		for (auto it = compositions_from_end.rbegin(); it != compositions_from_end.rend(); ++it)
+			(*it)->execute(*this);
 
 		// 2. Если нашли разделитель, читаем файл с начала вниз и собираем все строки с COMPOSITION
 		if (separator_found) {
 			ifs.clear();
 			ifs.seekg(0, std::ios::beg);
 
-			std::vector<std::string> compositions_from_start;
-
-			auto last_pos = ifs.tellg();
+			std::vector<instruction_ptr> compositions_from_start;
+			std::string line;
+			std::streampos last_pos = ifs.tellg();
 
 			while (std::getline(ifs, line)) {
-
 				remove_comment(line);
 				if (line.empty()) continue;
 
-				auto composition_position = line.find(COMPOSITION);
-				if (composition_position == std::string::npos)
-					break;
-
-				auto include_filename = line.substr(composition_position + COMPOSITION.length());
-				trim(include_filename);
-
-				compositions_from_start.push_back(include_filename);
-
-				last_pos = ifs.tellg(); // Позиция **после** прочитанной строки
+				// Лексер и парсер для проверки COMPOSITION
+				try {
+					extended_lexer lexer(line);
+					auto tokens = lexer.tokenize();
+					extended_parser parser(tokens);
+					auto instr_ptr = parser.parse_instruction();
+					compositions_from_start.push_back(std::move(instr_ptr));
+					last_pos = ifs.tellg();
+				}
+				catch (...) {
+					break; // Не COMPOSITION - конец блока
+				}
 			}
 
-			// Теперь last_pos указывает на позицию после последней строки с COMPOSITION
+			// Позиция после последней строки с COMPOSITION
 			this->_file_stack.push({ filename, last_pos });
 
 			// Добавляем файлы в стек в обратном порядке
 			for (auto it = compositions_from_start.rbegin(); it != compositions_from_start.rend(); ++it)
-				_file_stack.push({ *it, std::nullopt });
+				(*it)->execute(*this);
 		}
 	}
 }
