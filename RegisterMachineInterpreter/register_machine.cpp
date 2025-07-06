@@ -227,7 +227,7 @@ namespace IMD {
 
 		++this->_carriage;
 
-		return std::make_unique<goto_instruction>(rm, mark);
+		return std::make_unique<goto_instruction>(mark);
 
 	}
 
@@ -252,7 +252,9 @@ namespace IMD {
 		if (from_register_token.type() != token_type::variable)
 			throw std::runtime_error("Expected register after '"s + MOVE + "'"s);
 		
-		return std::make_unique<move_assignment_instruction>(rm, to_register_token.text(), from_register_token.text());
+		return std::make_unique<move_assignment_instruction>(
+			to_register_token.text(),
+			from_register_token.text());
 	}
 
 	instruction_ptr extended_register_machine::extended_parser::parse_copy_assignment_instruction(basic_register_machine& rm) {
@@ -289,7 +291,7 @@ namespace IMD {
 			if (right_operand_token.type() == token_type::literal && std::stoi(right_operand_token.text()) < 0)
 				throw std::runtime_error("Only positive integers allowed for subtraction");
 
-			return std::make_unique<copy_assignment_instruction>(rm,
+			return std::make_unique<copy_assignment_instruction>(
 				target_token.text(),
 				copy_assignment_instruction::operation::plus,
 				left_operand_token.text(),
@@ -308,7 +310,7 @@ namespace IMD {
 			if (right_operand_token.type() == token_type::literal && std::stoi(right_operand_token.text()) < 0)
 				throw std::runtime_error("Only positive integers allowed for subtraction");
 
-			return std::make_unique<copy_assignment_instruction>(rm,
+			return std::make_unique<copy_assignment_instruction>(
 				target_token.text(),
 				copy_assignment_instruction::operation::minus,
 				left_operand_token.text(),
@@ -320,14 +322,14 @@ namespace IMD {
 				if (std::stoi(left_operand_token.text()) < 0)
 					throw std::runtime_error("Only positive integers allowed for assignment");
 
-				return std::make_unique<copy_assignment_instruction>(rm,
+				return std::make_unique<copy_assignment_instruction>(
 					target_token.text(),
 					copy_assignment_instruction::operation::none,
 					left_operand_token.text(),
 					"");
 			}
 			else if (left_operand_token.type() == token_type::variable) {
-				return std::make_unique<copy_assignment_instruction>(rm,
+				return std::make_unique<copy_assignment_instruction>(
 					target_token.text(),
 					copy_assignment_instruction::operation::none,
 					left_operand_token.text(),
@@ -371,7 +373,7 @@ namespace IMD {
 	instruction_ptr basic_register_machine::basic_parser::parse_stop_instruction(basic_register_machine& rm) {
 		if (this->is_type_match(token_type::keyword_stop)) {
 			++this->_carriage;
-			return std::make_unique<stop_instruction>(rm);
+			return std::make_unique<stop_instruction>();
 		}
 
 		throw std::runtime_error("Invalid stop instruction");
@@ -437,7 +439,7 @@ namespace IMD {
 		if (!this->is_type_match(token_type::literal))
 			throw std::runtime_error("Expected number after '" + GOTO + "'");
 
-		return std::make_unique<condition_instruction>(rm,
+		return std::make_unique<condition_instruction>(
 			register_token.text(),
 			std::stoul(goto_true_token.text()),
 			std::stoul(goto_false_token.text()));
@@ -480,7 +482,7 @@ namespace IMD {
 			if (right_operand_token.text() != "1")
 				throw std::runtime_error("Only increment by 1 is allowed");
 
-			return std::make_unique<copy_assignment_instruction>(rm,
+			return std::make_unique<copy_assignment_instruction>(				
 				target_token.text(),
 				copy_assignment_instruction::operation::plus,
 				left_operand_token.text(),
@@ -496,7 +498,7 @@ namespace IMD {
 			if (right_operand_token.text() != "1")
 				throw std::runtime_error("Only decrement by 1 is allowed");
 
-			return std::make_unique<copy_assignment_instruction>(rm,
+			return std::make_unique<copy_assignment_instruction>(				
 				target_token.text(),
 				copy_assignment_instruction::operation::minus,
 				left_operand_token.text(),
@@ -511,7 +513,7 @@ namespace IMD {
 			if (std::stoi(left_operand_token.text()) < 0)
 				throw std::runtime_error("Only positive integers allowed for assignment");
 
-			return std::make_unique<copy_assignment_instruction>(rm,
+			return std::make_unique<copy_assignment_instruction>(
 				target_token.text(),
 				copy_assignment_instruction::operation::none,
 				left_operand_token.text(),
@@ -578,7 +580,7 @@ namespace IMD {
 	// Реализация инструкций
 
 	// Конструктор
-	instruction::instruction(basic_register_machine& rm) noexcept: _rm(rm) {}
+	instruction::instruction() noexcept {}
 
 	// Возвращает описание инструкции
 	const std::string& instruction::description() const noexcept {
@@ -586,84 +588,84 @@ namespace IMD {
 	}
 
 	// Конструктор
-	copy_assignment_instruction::copy_assignment_instruction(basic_register_machine& rm, const std::string& target_register, const operation& operation, const std::string& left_operand, const std::string& right_operand) noexcept:
-		instruction(rm), _target_register(target_register), _operation(operation), _left_operand(left_operand), _right_operand(right_operand) {
+	copy_assignment_instruction::copy_assignment_instruction(const std::string& target_register, const operation& operation, const std::string& left_operand, const std::string& right_operand) noexcept:
+		instruction(), _target_register(target_register), _operation(operation), _left_operand(left_operand), _right_operand(right_operand) {
 		this->_description = this->_target_register + " " + COPY + " " + this->_left_operand + " " + (this->_operation == operation::plus ? PLUS : this->_operation == operation::minus ? MINUS : " ") + " " + this->_right_operand;
 	}
 
 	// Выполнение инструкции копирующего присваивания
-	void copy_assignment_instruction::execute() {
+	void copy_assignment_instruction::execute(basic_register_machine& brm) {
 
-		++this->_rm._carriage;
+		++brm._carriage;
 
 		try {
 			int value{ 0 };
 			switch (this->_operation) {
 			case operation::none:
-				value = get_value(this->_rm, _left_operand);
+				value = get_value(brm, _left_operand);
 				break;
 			case operation::plus:
-				value = get_value(this->_rm, _left_operand) + get_value(this->_rm, _right_operand);
+				value = get_value(brm, _left_operand) + get_value(brm, _right_operand);
 				break;
 			case operation::minus:
-				value = get_value(this->_rm, _left_operand) - get_value(this->_rm, _right_operand);
+				value = get_value(brm, _left_operand) - get_value(brm, _right_operand);
 				if (value < 0)
 					value = 0;
 				break;
 			}
-			_rm._registers[_target_register] = value;
+			brm._registers[_target_register] = value;
 		}
 		catch (...) {}
 	}
 
 	// Конструктор
-	condition_instruction::condition_instruction(basic_register_machine& rm, const std::string& compared_register, size_t goto_true, size_t goto_false) noexcept :
-		instruction(rm), _compared_register(compared_register), _goto_true(goto_true), _goto_false(goto_false) {
+	condition_instruction::condition_instruction(const std::string& compared_register, size_t goto_true, size_t goto_false) noexcept :
+		instruction(), _compared_register(compared_register), _goto_true(goto_true), _goto_false(goto_false) {
 		this->_description = IF + " " + this->_compared_register + " " + EQUAL + " 0 " + THEN + " " + GOTO + " " + std::to_string(this->_goto_true) + " " + ELSE + " " + GOTO + " " + std::to_string(this->_goto_false);
 	}
 	// Выполнение условной инструкции
-	void condition_instruction::execute() noexcept {
-		if (this->_rm._registers[this->_compared_register] == 0) this->_rm._carriage = this->_goto_true;
-		else this->_rm._carriage = this->_goto_false;
+	void condition_instruction::execute(basic_register_machine& brm) noexcept {
+		if (brm._registers[this->_compared_register] == 0) brm._carriage = this->_goto_true;
+		else brm._carriage = this->_goto_false;
 	}
 
 	// Конструктор
-	stop_instruction::stop_instruction(basic_register_machine& rm) noexcept : instruction(rm) {
+	stop_instruction::stop_instruction() noexcept : instruction() {
 		this->_description = STOP;
 	}
 	// Выполнение остановочной инструкции
-	void stop_instruction::execute() noexcept {
-		this->_rm._is_stopped = true;
+	void stop_instruction::execute(basic_register_machine& brm) noexcept {
+		brm._is_stopped = true;
 	}
 
 	// Конструктор
-	extended_condition_instruction::extended_condition_instruction(basic_register_machine& rm, const std::string& compared_register, size_t compared_value, size_t goto_true, size_t goto_false) noexcept : _compared_value(compared_value), condition_instruction(rm, compared_register, goto_true, goto_false) {
+	extended_condition_instruction::extended_condition_instruction(const std::string& compared_register, size_t compared_value, size_t goto_true, size_t goto_false) noexcept : _compared_value(compared_value), condition_instruction(compared_register, goto_true, goto_false) {
 		this->_description = IF + " " + this->_compared_register + " " + EQUAL + " " + std::to_string(this->_compared_value) + " " + THEN + " " + GOTO + " " + std::to_string(this->_goto_true) + " " + ELSE + " " + GOTO + " " + std::to_string(this->_goto_false);
 	}
 	// Выполнение расширенной условной инструкции
-	void extended_condition_instruction::execute() noexcept {
-		if (this->_rm._registers[this->_compared_register] == _compared_value) this->_rm._carriage = this->_goto_true;
-		else this->_rm._carriage = this->_goto_false;
+	void extended_condition_instruction::execute(basic_register_machine& brm) noexcept {
+		if (brm._registers[this->_compared_register] == _compared_value) brm._carriage = this->_goto_true;
+		else brm._carriage = this->_goto_false;
 	}
 
 	// Конструктор
-	goto_instruction::goto_instruction(basic_register_machine& rm, size_t mark) noexcept : instruction(rm), _mark(mark) {
+	goto_instruction::goto_instruction(size_t mark) noexcept : instruction(), _mark(mark) {
 		this->_description = GOTO + " " + std::to_string(this->_mark);
 	}
 	// Выполнение инструкции передвижения
-	void goto_instruction::execute() noexcept {
-		this->_rm._carriage = this->_mark;
+	void goto_instruction::execute(basic_register_machine& brm) noexcept {
+		brm._carriage = this->_mark;
 	}
 
 	//Конструктор
-	move_assignment_instruction::move_assignment_instruction(basic_register_machine& rm, const std::string& to_register, const std::string& from_register) noexcept : instruction(rm), _to_register(to_register), _from_register(from_register) {
+	move_assignment_instruction::move_assignment_instruction(const std::string& to_register, const std::string& from_register) noexcept : instruction(), _to_register(to_register), _from_register(from_register) {
 		this->_description = this->_to_register + " " + MOVE + " " + this->_from_register;
 	}
 	// Выполнение инструкции перемещения
-	void move_assignment_instruction::execute() {
-		++this->_rm._carriage;
-		this->_rm._registers[this->_to_register] = this->_rm._registers[this->_from_register];
-		this->_rm._registers[this->_from_register] = 0;
+	void move_assignment_instruction::execute(basic_register_machine& brm) {
+		++brm._carriage;
+		brm._registers[this->_to_register] = brm._registers[this->_from_register];
+		brm._registers[this->_from_register] = 0;
 		return;
 	}
 
@@ -816,7 +818,7 @@ namespace IMD {
 				std::cout << this->_carriage << ": " << this->_instructions[this->_carriage]->description() << std::endl;
 			}
 
-			current_instruction->execute();
+			current_instruction->execute(*this);
 		}
 	}
 
@@ -982,7 +984,7 @@ namespace IMD {
 				std::cout << this->_carriage << ": " << this->_instructions[this->_carriage]->description() << std::endl;
 			}
 
-			this->_instructions[this->_carriage]->execute();
+			this->_instructions[this->_carriage]->execute(*this);
 		}
 	}
 

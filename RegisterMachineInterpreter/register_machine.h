@@ -45,18 +45,17 @@ namespace IMD {
 	// Класс инструкции
 	class instruction {
 	protected:
-		// Регистровая машина
-		basic_register_machine& _rm;
+		// Нормализованное описание
 		std::string _description;
 	public:
 		// Конструктор
-		instruction(basic_register_machine& rm) noexcept;
+		instruction() noexcept;
 		// Деструктор
 		virtual ~instruction() = default;
 
-		// Выполняет инструкцию
-		virtual void execute() = 0;
-		// Возвращает описание инструкции
+		// Выполнение инструкции
+		virtual void execute(basic_register_machine& brm) = 0;
+		// Возвращает нормализованное описание инструкции
 		virtual const std::string& description() const noexcept;
 	};
 
@@ -64,23 +63,26 @@ namespace IMD {
 
 	// Класс инструкции копирующего присваивания
 	class copy_assignment_instruction : public instruction {
-	public:
+	protected:
 		friend class parser;
+
+	public:
 		enum class operation { none, plus, minus };
+
 	protected:
 		std::string _target_register;
 		operation _operation; // Тип присваивания: x <- 2, x <- x + 1, x <- x - 1
 		std::string _left_operand;
-		std::string _right_operand; // Пустая строка при Copy
+		std::string _right_operand; // Пустая строка при виде x <- a
 	public:
 		// Конструктор
-		copy_assignment_instruction(basic_register_machine& rm, const std::string& target_register, const operation& operation, const std::string& left_operand, const std::string& right_operand) noexcept;
+		copy_assignment_instruction(const std::string& target_register, const operation& operation, const std::string& left_operand, const std::string& right_operand) noexcept;
 
 		// Деструктор
 		~copy_assignment_instruction() override = default;
 
 		// Выполнение инструкции копирующего присваивания
-		void execute() override;
+		void execute(basic_register_machine& brm) override;
 	};
 
 	// Класс условной инструкции
@@ -91,25 +93,25 @@ namespace IMD {
 		size_t _goto_false;
 	public:
 		// Конструктор
-		condition_instruction(basic_register_machine& rm, const std::string& compared_register, size_t goto_true, size_t goto_false) noexcept;
+		condition_instruction(const std::string& compared_register, size_t goto_true, size_t goto_false) noexcept;
 
 		// Деструктор
 		~condition_instruction() override = default;
 
 		// Выполнение условной инструкции
-		void execute() noexcept override;
+		void execute(basic_register_machine& brm) noexcept override;
 	};
 
 	// Класс остановочной инструкции
 	class stop_instruction : public instruction {
 	public:
 		// Конструктор
-		stop_instruction(basic_register_machine& rm) noexcept;
+		stop_instruction() noexcept;
 		// Деструктор
 		~stop_instruction() override = default;
 
 		// Выполнение остановочной инструкции
-		void execute() noexcept override;
+		void execute(basic_register_machine& brm) noexcept override;
 	};
 
 	// Класс расширенной условной инструкции
@@ -118,12 +120,12 @@ namespace IMD {
 		size_t _compared_value;
 	public:
 		// Конструктор
-		extended_condition_instruction(basic_register_machine& rm, const std::string& reg, size_t compared_value, size_t goto_true, size_t goto_false) noexcept;
+		extended_condition_instruction(const std::string& compared_register, size_t compared_value, size_t goto_true, size_t goto_false) noexcept;
 		// Деструктор
 		~extended_condition_instruction() override = default;
 
 		// Выполнение расширенной условной инструкции
-		void execute() noexcept override;
+		void execute(basic_register_machine& brm) noexcept override;
 	};
 
 	// Класс инструкции передвижения
@@ -132,12 +134,12 @@ namespace IMD {
 		size_t _mark;
 	public:
 		// Конструктор
-		goto_instruction(basic_register_machine& rm, size_t mark) noexcept;
+		goto_instruction(size_t mark) noexcept;
 		// Деструктор
 		~goto_instruction() override = default;
 
 		// Выполнение инструкции передвижения
-		void execute() noexcept override;
+		void execute(basic_register_machine& brm) noexcept override;
 	};
 
 	// Класс инструкции перемещающего присваивания
@@ -147,30 +149,30 @@ namespace IMD {
 		std::string _from_register;
 	public:
 		// Конструктор
-		move_assignment_instruction(basic_register_machine& rm, const std::string& _to_register, const std::string& _from_register) noexcept;
+		move_assignment_instruction( const std::string& _to_register, const std::string& _from_register) noexcept;
 		// Деструктор
 		~move_assignment_instruction() override = default;
 
 		// Выполнение инструкции перемещающего присваивания
-		void execute() override;
+		void execute(basic_register_machine& brm) override;
 	};
 
-
+	// Перечисление типов токена
 	enum class token_type {
 		variable, // Регистр (переменная)
-		literal, // Положительный целый литерал
-		keyword_if, // If
-		keyword_then, // Then
-		keyword_else, // Else
-		keyword_goto, // Goto
+		literal, // Литерал неотрицательного целого числа
+		keyword_if, // IF
+		keyword_then, // THEN
+		keyword_else, // ELSE
+		keyword_goto, // GOTO
 		operator_copy_assignment, // <-
-		operator_move_assignment, // <<-
-		operator_plus, // +
-		operator_minus, // -
-		operator_equal, // ==
-		keyword_stop, // stop
-		keyword_call, // call
-		eof,
+		operator_move_assignment, // !~
+		operator_plus, // PLUS
+		operator_minus, // MINUS
+		operator_equal, // EQUAL
+		keyword_stop, // STOP
+		keyword_composition, // COMPOSITION
+		eof, // END OF FILE OR LINE
 		unknown
 	};
 
@@ -187,9 +189,13 @@ namespace IMD {
 		friend class goto_instruction;
 		friend class move_assignment_instruction;
 
+	protected:
+		// Класс токена
 		class token {
 		private:
+			// Тип токена
 			token_type _type;
+			// Контекст токена
 			std::string _text;
 		public:
 			// Конструктор
@@ -197,24 +203,30 @@ namespace IMD {
 
 			// Возвращает тип токена
 			const token_type& type() const noexcept;
-			// Возвращает тип токена
+			// Возвращает контекст токена
 			const std::string& text() const noexcept;
 
 		};
+
+		// Класс базового лексера
 		class basic_lexer {
 		protected:
 			// Строка с инструкцией
 			std::string_view _line;
 			// Каретка, описывающая позицию считывания строки с инструкцией
 			size_t _carriage;
+
 		public:
 			// Конструктор
 			basic_lexer(std::string_view line) noexcept;
 
+			// Возвращает вектор токенов
 			virtual std::vector<token> tokenize();
 
 		protected:
+			// Пропуск пробелов
 			void skip_spaces() noexcept;
+			// Проверка на конец строки
 			bool eof() const noexcept;
 
 			// Возвращает следующий токен
