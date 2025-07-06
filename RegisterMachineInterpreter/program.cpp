@@ -3,13 +3,18 @@
 #include <string>
 
 int main() {
+
+
+
 	setlocale(LC_ALL, "Russian");
 
-	std::string filename{ "RM1.txt" };
+	std::string filename{ "RM5.txt" };
 	IMD::extended_register_machine RM(filename, true);
 
+	RM.run();
+
 	try {
-		RM.run();
+		
 	}
 	catch (const std::exception& e) {
 		std::cout << e.what();

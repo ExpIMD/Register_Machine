@@ -6,7 +6,6 @@
 #include <ios>
 #include <iostream>
 #include <optional>
-#include <regex>
 #include <sstream>
 #include <stack>
 #include <stdexcept>
@@ -48,7 +47,10 @@ namespace IMD {
 	bool is_register(const std::string& line) noexcept;
 
 	// Checks if the given string represents a non-negative integer literal
-	bool is_literal(const std::string& line) noexcept;
+	bool is_non_negative_literal(const std::string& line) noexcept;
+
+	// Checks if the given string represents a negative integer literal
+	bool is_negative_literal(const std::string& line) noexcept;
 
 	// Checks if the given string is a valid filename with an extension
 	bool is_filename_with_extension(const std::string& line) noexcept;
@@ -294,7 +296,7 @@ namespace IMD {
 			// Destructor
 			~basic_parser() noexcept = default;
 
-			//Checks for the end of a vector
+			// Checks for the end of a vector
 			bool eof() const noexcept;
 			// Returns the current token
 			const token& preview() const;
@@ -374,7 +376,7 @@ namespace IMD {
 
 		// Print carriage separated by a separator without a new line
 		void print_carriage() const noexcept;
-		// Печать каретки с переходом на новую строку
+		// Print carriage separated by a separator and go to a new line
 		void println_carriage() const noexcept;
 
 		// Returns an integer value parsed from a string, which may contain a literal or a register
@@ -382,14 +384,9 @@ namespace IMD {
 
 	protected:
 		// Load all instructions
-		virtual void load_all_instructions(size_t start_position = 0, int border = std::ios::beg);
+		virtual void load_all_instructions(std::streampos start_position = 0, int border = std::ios::beg);
 		// Follow all instructions
 		virtual void execute_all_instructions();
-
-		// Проверка корректности формата строки с входными регистрами
-		virtual bool is_valid_input_registers_line(const std::string& instruction) const noexcept;
-		// Проверка корректности формата строки с выходными регистрами
-		virtual bool is_valid_output_registers_line(const std::string& instruction) const noexcept;
 
 		// Parsing input registers
 		void parse_input_registers(const std::string& line);
@@ -463,7 +460,7 @@ namespace IMD {
 
 	protected:
 		// Load all instruction
-		void load_all_instructions(size_t start_position = 0, int border = std::ios::beg) override;
+		void load_all_instructions(std::streampos start_position = 0, int border = std::ios::beg) override;
 
 		// Follow all instructions
 		void execute_all_instructions() override;

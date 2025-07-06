@@ -1,10 +1,10 @@
 ﻿#include "register_machine.h"
+
 #include <filesystem>
 #include <fstream>
 #include <ios>
 #include <iostream>
 #include <optional>
-#include <regex>
 #include <sstream>
 #include <stack>
 #include <stdexcept>
@@ -48,12 +48,25 @@ namespace IMD {
 	}
 
 	// Checks if the given string represents a non-negative integer literal
-	bool is_literal(const std::string& line) noexcept {
+	bool is_non_negative_literal(const std::string& line) noexcept {
 		if (line.empty())
 			return false;
 
 		for (size_t i{ 0 }; i < line.size(); ++i) // All characters must be numbers from 0 to 9
 			if (!std::isdigit(line[i]))
+				return false;
+
+		return true;
+	}
+	// Checks if the given string represents a negative integer literal
+	bool is_negative_literal(const std::string& line) noexcept {
+		if (line.size() < 2) // минимум '-' и одна цифра
+			return false;
+		if (line[0] != '-')
+			return false;
+
+		for (size_t i = 1; i < line.size(); ++i)
+			if (!std::isdigit(static_cast<unsigned char>(line[i])))
 				return false;
 
 		return true;
@@ -125,18 +138,15 @@ namespace IMD {
 		std::vector<token> tokens{};
 		while (true) {
 			this->skip_spaces();
-			if (eof()) break;
+			if (this->eof()) break;
+			tokens.push_back(*(this->next_token()));
 
-			if (auto token = this->next_token())
-				tokens.push_back(*token);
-			else
-				throw std::runtime_error("Unknown token at position: " + std::to_string(this->_carriage));
 		}
-		//tokens.emplace_back(token_type::eof, "");
+
 		return tokens;
 	}
 
-	// Возвращает следующий токен
+	// Returns the next token
 	std::optional<basic_register_machine::token> basic_register_machine::basic_lexer::next_token() {
 		if (this->eof())
 			return std::nullopt;
@@ -153,46 +163,54 @@ namespace IMD {
 			{GOTO, token_type::keyword_goto},
 		};
 
-		for (const auto& [keyword, type] : keyword_type_pairs) { // TODO: из-за этого места хуже обрабатываются ошибки!!!
+		for (const auto& [keyword, type] : keyword_type_pairs) {
 			if (this->_line.size() - this->_carriage >= keyword.size() &&
 				this->_line.compare(this->_carriage, keyword.size(), keyword) == 0) {
-				this->_carriage += keyword.size();
-				return token{ type, keyword };
+
+				size_t next_symbol_position = this->_carriage + keyword.size();
+				if (next_symbol_position < this->_line.size() ||
+					!std::isspace(static_cast<unsigned char>(this->_line[next_symbol_position]))) {
+					this->_carriage += keyword.size();
+					return token{ type, keyword };
+				}
 			}
 		}
 
-		size_t start = this->_carriage;
+		size_t start = { this->_carriage };
 		while (!this->eof() && !std::isspace(this->_line[this->_carriage]))
 			++this->_carriage;
-
 		std::string text = std::string(this->_line.substr(start, this->_carriage - start));
 
-		if (is_literal(text))
+		if (text.empty()) return std::nullopt;
+
+		if (is_non_negative_literal(text))
 			return token{ token_type::literal, text };
 
-		else if (is_register(text))
+		if (is_register(text))
 			return token{ token_type::variable, text };
 
-		return std::nullopt;
+		if (is_negative_literal(text))
+			throw std::runtime_error("Expected a non-negative integer literal at position: " + std::to_string(this->_carriage));
+
+		throw std::runtime_error("Unknown token at position: " + std::to_string(this->_carriage));
 	}
 
-
-	// Пропуск пробелов
+	// Skip spaces
 	void basic_register_machine::basic_lexer::skip_spaces() noexcept {
 		while (!this->eof() && std::isspace(this->_line[this->_carriage]))
 			++this->_carriage;
 	}
 
-	// Проверка на конец строки
+	// Checking for end of line
 	bool basic_register_machine::basic_lexer::eof() const noexcept {
 		return this->_carriage >= this->_line.size();
 	}
 
-	// Реализация расширенного лексера
+	// Implementation of the extended register machine lexer
 
 	extended_register_machine::extended_lexer::extended_lexer(const std::string& line) noexcept : basic_lexer(line) {}
 
-	// Возвращает следующий токен
+	// Returns the next token
 	std::optional<basic_register_machine::token> extended_register_machine::extended_lexer::next_token() {
 		if (this->eof())
 			return std::nullopt;
@@ -214,36 +232,44 @@ namespace IMD {
 		for (const auto& [keyword, type] : keyword_type_pairs) {
 			if (this->_line.size() - this->_carriage >= keyword.size() &&
 				this->_line.compare(this->_carriage, keyword.size(), keyword) == 0) {
-				this->_carriage += keyword.size();
-				return token{ type, keyword };
+
+				size_t next_symbol_position = this->_carriage + keyword.size();
+				if (next_symbol_position < this->_line.size() ||
+					!std::isspace(static_cast<unsigned char>(this->_line[next_symbol_position]))) {
+					this->_carriage += keyword.size();
+					return token{ type, keyword };
+				}
 			}
 		}
 
-		size_t start = this->_carriage;
+		size_t start = { this->_carriage };
 		while (!this->eof() && !std::isspace(this->_line[this->_carriage]))
 			++this->_carriage;
-
 		std::string text = std::string(this->_line.substr(start, this->_carriage - start));
 
-		if (is_filename_with_extension(text)) {
-			return token{ token_type::file, text };
-		}
-		else if (is_literal(text)) {
-			return token{ token_type::literal, text };
-		}
-		else if (is_register(text)) {
-			return token{ token_type::variable, text };
-		}
+		if (text.empty()) return std::nullopt;
 
-		return std::nullopt;
+		if (is_filename_with_extension(text))
+			return token{ token_type::file, text };
+
+		if (is_non_negative_literal(text))
+			return token{ token_type::literal, text };
+
+		if (is_register(text))
+			return token{ token_type::variable, text };
+
+		if (is_negative_literal(text))
+			throw std::runtime_error("Expected a non-negative integer literal at position: " + std::to_string(this->_carriage));
+
+		throw std::runtime_error("Unknown token at position: " + std::to_string(this->_carriage));
 	}
 
-	// Реализация расширенного парсерса
+	// Implementation of the extended register machine parser
 
-	// Конструктор
+	// Constructor
 	extended_register_machine::extended_parser::extended_parser(const std::vector<token>& tokens) noexcept : basic_parser(tokens) {};
 
-	// Парсинг произвольной инструкции
+	// Returns a unique pointer to the instruction
 	std::unique_ptr<basic_register_machine::instruction> extended_register_machine::extended_parser::make_instruction() {
 		if (this->eof())
 			throw std::runtime_error("Empty instruction");
@@ -251,24 +277,23 @@ namespace IMD {
 		auto current_type = this->preview().type();
 
 		if (current_type == token_type::unknown)
-			throw std::runtime_error("Unknown instruction start");
+			throw std::runtime_error("Unknown instruction found");
 
 		if (current_type == token_type::keyword_composition)
 			return this->make_composition_command();
 
-		if (current_type == token_type::keyword_stop) {
+		if (current_type == token_type::keyword_stop)
 			return this->make_stop_instruction();
-		}
-		else if (current_type == token_type::keyword_if) {
-			return this->make_condition_instruction();
-		}
-		else if (current_type == token_type::keyword_goto) {
-			return this->make_goto_assignment_instruction();
-		}
-		else if (current_type == token_type::variable) {
-			if (this->_carriage + 1 >= this->_tokens.size()) throw std::runtime_error("Expected assignment operator after register");
 
-			auto next_token = this->_tokens[this->_carriage + 1];
+		if (current_type == token_type::keyword_if)
+			return this->make_condition_instruction();
+
+		if (current_type == token_type::keyword_goto)
+			return this->make_goto_assignment_instruction();
+
+
+		if (current_type == token_type::variable) {
+			auto next_token = this->_tokens.at(this->_carriage + 1);
 			if (next_token.type() == token_type::operator_copy_assignment)
 				return this->make_copy_assignment_instruction();
 			else if (next_token.type() == token_type::operator_move_assignment) {
@@ -316,17 +341,17 @@ namespace IMD {
 
 		++this->_carriage;
 
-		// Обработка целевого регистра
+		// Processing the target register
 		if (to_register_token.type() != token_type::variable)
-			throw std::runtime_error("Expected register at start of move assignment");
+			throw std::runtime_error("Expected register at start of move assignment"s);
 
-		// Обработка оператора копирующего присваивания
+		// Handling the copy assignment operator
 		if (!this->is_type_match(token_type::operator_move_assignment))
 			throw std::runtime_error("Expected '"s + MOVE + "' after target register"s);
 
 		++this->_carriage;
 
-		// Обработка левого операнда
+		// Processing the source register
 		auto from_register_token = this->preview();
 
 		if (from_register_token.type() != token_type::variable)
@@ -342,17 +367,17 @@ namespace IMD {
 
 		++this->_carriage;
 
-		// Обработка целевого регистра
+		// Processing the target register
 		if (target_token.type() != token_type::variable)
 			throw std::runtime_error("Expected register at start of copy assignment");
 
-		// Обработка оператора копирующего присваивания
+		// Handling the copy assignment operator
 		if (!this->is_type_match(token_type::operator_copy_assignment))
 			throw std::runtime_error("Expected '"s + COPY + "' after target register"s);
 
 		++this->_carriage;
 
-		// Обработка левого операнда
+		// Left operand processing
 		auto left_operand_token = this->preview();
 
 		if (left_operand_token.type() != token_type::variable && left_operand_token.type() != token_type::literal)
@@ -360,16 +385,16 @@ namespace IMD {
 
 		++this->_carriage;
 
-		// Проверяем есть ли операция
-		if (this->is_type_match(token_type::operator_plus)) {
+		// Processing an arithmetic operation
+		if (this->is_type_match(token_type::operator_plus)) { // Found a plus
 			++this->_carriage;
 			auto right_operand_token = this->preview();
 			++this->_carriage;
 			if (right_operand_token.type() != token_type::literal && right_operand_token.type() != token_type::variable)
-				throw std::runtime_error("Expected number or literal after '" + PLUS "'");
+				throw std::runtime_error("Expected number or literal after '" + PLUS "'"s);
 
 			if (right_operand_token.type() == token_type::literal && std::stoi(right_operand_token.text()) < 0)
-				throw std::runtime_error("Only positive integers allowed for subtraction");
+				throw std::runtime_error("Only positive integers allowed for subtraction"s);
 
 			return std::make_unique<copy_assignment_instruction>(
 				target_token.text(),
@@ -377,7 +402,8 @@ namespace IMD {
 				left_operand_token.text(),
 				right_operand_token.text());
 		}
-		else if (this->is_type_match(token_type::operator_minus)) {
+
+		if (this->is_type_match(token_type::operator_minus)) { // Found a minus
 			++this->_carriage;
 
 			auto right_operand_token = this->preview();
@@ -385,10 +411,10 @@ namespace IMD {
 			++this->_carriage;
 
 			if (right_operand_token.type() != token_type::literal && right_operand_token.type() != token_type::variable) // TODO: странно обрабатывает отрицательные числа
-				throw std::runtime_error("Expected number or literal after '" + MINUS "'");
+				throw std::runtime_error("Expected number or literal after '" + MINUS "'"s);
 
 			if (right_operand_token.type() == token_type::literal && std::stoi(right_operand_token.text()) < 0)
-				throw std::runtime_error("Only positive integers allowed for subtraction");
+				throw std::runtime_error("Only positive integers allowed for subtraction"s);
 
 			return std::make_unique<copy_assignment_instruction>(
 				target_token.text(),
@@ -396,60 +422,60 @@ namespace IMD {
 				left_operand_token.text(),
 				right_operand_token.text());
 		}
-		else {
-			// Простое присваивание: x <- a, где a — положительное число
-			if (left_operand_token.type() == token_type::literal) {
-				if (std::stoi(left_operand_token.text()) < 0)
-					throw std::runtime_error("Only positive integers allowed for assignment");
 
-				return std::make_unique<copy_assignment_instruction>(
-					target_token.text(),
-					basic_register_machine::operation::none,
-					left_operand_token.text(),
-					"");
-			}
-			else if (left_operand_token.type() == token_type::variable) {
-				return std::make_unique<copy_assignment_instruction>(
-					target_token.text(),
-					basic_register_machine::operation::none,
-					left_operand_token.text(),
-					"");
-			}
-			else throw std::runtime_error("Expected number or literal in " + COPY);
+		if (left_operand_token.type() == token_type::literal) {
+			if (std::stoi(left_operand_token.text()) < 0)
+				throw std::runtime_error("Only positive integers allowed for copy assignment"s);
+
+			return std::make_unique<copy_assignment_instruction>(
+				target_token.text(),
+				basic_register_machine::operation::none,
+				left_operand_token.text(),
+				"");
 		}
+		else if (left_operand_token.type() == token_type::variable) {
+			return std::make_unique<copy_assignment_instruction>(
+				target_token.text(),
+				basic_register_machine::operation::none,
+				left_operand_token.text(),
+				"");
+		}
+		else throw std::runtime_error("Expected number or literal in '" + COPY + "'"s);
 	}
 
-	// Реализация базового парсера
+	// Implementation of the basic register machine parser
 
-	// Конструктор
+	// Constructor
 	basic_register_machine::basic_parser::basic_parser(const std::vector<token>& tokens) noexcept : _tokens(tokens), _carriage(0) {}
 
-	// Проверка на конец вектора токенов
+	// Checks for the end of a vector
 	bool basic_register_machine::basic_parser::eof() const noexcept {
 		return this->_carriage >= this->_tokens.size();
 	}
 
-	// Возвращает текущий токен
+	// Returns the current token
 	const basic_register_machine::token& basic_register_machine::basic_parser::preview() const {
 		return this->_tokens[this->_carriage];
 	}
 
-	// Парсинг произвольной инструкции
+	// Returns a unique pointer to the instruction
 	std::unique_ptr<basic_register_machine::instruction> basic_register_machine::basic_parser::make_instruction() {
 		if (this->eof())
 			throw std::runtime_error("Empty instruction");
 
 		if (this->preview().type() == token_type::keyword_stop)
 			return this->make_stop_instruction();
-		else if (this->preview().type() == token_type::keyword_if)
+
+		if (this->preview().type() == token_type::keyword_if)
 			return this->make_condition_instruction();
-		else if (this->preview().type() == token_type::variable)
+
+		if (this->preview().type() == token_type::variable)
 			return this->make_copy_assignment_instruction();
-		
+
 		throw std::runtime_error("Unknown instruction start");
 	}
 
-	// Парсинг остановочной инструкции
+	// Returns a unique pointer to the stop instruction
 	std::unique_ptr<basic_register_machine::instruction> basic_register_machine::basic_parser::make_stop_instruction() {
 		if (this->is_type_match(token_type::keyword_stop)) {
 			++this->_carriage;
@@ -459,76 +485,61 @@ namespace IMD {
 		throw std::runtime_error("Invalid stop instruction");
 	}
 
-	// Constructor
-	extended_register_machine::composition_instruction::composition_instruction(const std::string& include_filename) noexcept : instruction(), _include_filename(include_filename) {
-		this->_description = COMPOSITION + " " + this->_include_filename;
-	}
-
-	// Executing a composition instruction
-	void extended_register_machine::composition_instruction::execute(basic_register_machine& brm) noexcept {
-		auto erm = dynamic_cast<extended_register_machine*>(&brm);
-		if (erm == NULL)
-			throw std::runtime_error("");
-
-		erm->_file_stack.push({ this->_include_filename, std::nullopt });
-	}
-
-	// Парсинг условной инструкции
+	// Returns a unique pointer to the condition instruction
 	std::unique_ptr<basic_register_machine::instruction> basic_register_machine::basic_parser::make_condition_instruction() {
-		// Формат: if <reg> == <value> then goto <num> else goto <num>
 		++this->_carriage;
 
-		// Обработка регистра
+		// Processing the compared register
 		auto register_token = this->preview();
 		if (register_token.type() != token_type::variable)
 			throw std::runtime_error("Expected register after if");
 
 		++this->_carriage;
 
-		// Обработка оператора сравнения на равенство
+		// Handling the equality comparison operator
 		if (!this->is_type_match(token_type::operator_equal))
 			throw std::runtime_error("Expected '" + EQUAL + "' after register");
 
 		++this->_carriage;
 
-		// Обработка сравниваемого значения
+		// Processing the compared value
 		if (!this->is_type_match(token_type::literal) || this->preview().text() != "0")
 			throw std::runtime_error("Expected number 0 after '" + EQUAL + "'");
 
 		++this->_carriage;
 
-		// Обработка ключевого слова THEN
+		// Processing the THEN keyword
 		if (!this->is_type_match(token_type::keyword_then))
 			throw std::runtime_error("Expected '" + THEN + "'");
 
 		++this->_carriage;
 
-		// Обработка ключевого слова GOTO
+		// Processing the GOTO keyword
 		if (!this->is_type_match(token_type::keyword_goto))
 			throw std::runtime_error("Expected '" + GOTO + "' after '" + THEN + "'");
 
 		++this->_carriage;
 
-		// Обработка GOTO1
+		// Processing the TRUE_MARKER keyword
 		auto goto_true_token = this->preview();
 		if (!this->is_type_match(token_type::literal))
 			throw std::runtime_error("Expected number after '" + GOTO + "'");
 
 		++this->_carriage;
 
-		// Обработка ELSE
+		// Processing the ELSE keyword
 		if (!this->is_type_match(token_type::keyword_else))
 			throw std::runtime_error("Expected 'else'");
 
 		++this->_carriage;
 
-		// Обработка ключевого слова GOTO
+		// Processing the GOTO keyword
 		if (!this->is_type_match(token_type::keyword_goto))
 			throw std::runtime_error("Expected '" + GOTO + "' after '" + ELSE + "'");
 
 		++this->_carriage;
 
-		// Обработка GOTO2
+		// Processing the FALSE_MARKER keyword
 		auto goto_false_token = this->preview();
 		if (!this->is_type_match(token_type::literal))
 			throw std::runtime_error("Expected number after '" + GOTO + "'");
@@ -539,23 +550,23 @@ namespace IMD {
 			std::stoul(goto_false_token.text()));
 	}
 
-	// Парсинг инструкции копирующего присваивания
+	// Returns a unique pointer to the copy assignment instruction
 	std::unique_ptr<basic_register_machine::instruction> basic_register_machine::basic_parser::make_copy_assignment_instruction() {
 		auto target_token = this->preview();
 
 		++this->_carriage;
 
-		// Обработка целевого регистра
+		// Processing the target register
 		if (target_token.type() != token_type::variable)
 			throw std::runtime_error("Expected register at start of copy assignment");
 
-		// Обработка оператора копирующего присваивания
+		// Handling the Copy Assignment Operator
 		if (!this->is_type_match(token_type::operator_copy_assignment))
 			throw std::runtime_error("Expected '"s + COPY + "' after target register"s);
 
 		++this->_carriage;
 
-		// Обработка левого операнда
+		// Left operand processing
 		auto left_operand_token = this->preview();
 
 		if (left_operand_token.type() != token_type::variable && left_operand_token.type() != token_type::literal)
@@ -565,7 +576,7 @@ namespace IMD {
 
 		++this->_carriage;
 
-		// Проверяем есть ли операция
+		// Let's check if there is an operation
 		if (this->is_type_match(token_type::operator_plus)) {
 			++this->_carriage;
 			auto right_operand_token = this->preview();
@@ -599,11 +610,11 @@ namespace IMD {
 				right_operand_token.text());
 		}
 		else {
-			// Простое присваивание: x <- a, где a — положительное число
+			// Simple assignment: x <- a, where a is a non-negative integer
 			if (left_operand_token.type() != token_type::literal)
 				throw std::runtime_error("Simple assignment only allows positive integer literals");
 
-			// Проверка, что число положительное
+			// Checking if a number is negative
 			if (std::stoi(left_operand_token.text()) < 0)
 				throw std::runtime_error("Only positive integers allowed for assignment");
 
@@ -615,30 +626,30 @@ namespace IMD {
 		}
 	}
 
-	// Проверка, соответсвует ли тип текущей инструкции заданному типу
+	// Check if the type of the current instruction matches the given type
 	bool basic_register_machine::basic_parser::is_type_match(const token_type& type) const noexcept {
 		if (!this->eof() && this->_tokens[this->_carriage].type() == type)
 			return true;
 		return false;
 	}
 
-	// Реализация инструкций
+	// Implementation of instructions
 
-	// Конструктор
+	// Constructor
 	basic_register_machine::instruction::instruction() noexcept {}
 
-	// Возвращает описание инструкции
+	// Returns a normalized description of the instruction
 	const std::string& basic_register_machine::instruction::description() const noexcept {
 		return this->_description;
 	}
 
-	// Конструктор
+	// Constructor
 	basic_register_machine::copy_assignment_instruction::copy_assignment_instruction(const std::string& target_register, const operation& operation, const std::string& left_operand, const std::string& right_operand) noexcept :
 		instruction(), _target_register(target_register), _operation(operation), _left_operand(left_operand), _right_operand(right_operand) {
 		this->_description = this->_target_register + " " + COPY + " " + this->_left_operand + " " + (this->_operation == operation::plus ? PLUS : this->_operation == operation::minus ? MINUS : " ") + " " + this->_right_operand;
 	}
 
-	// Выполнение инструкции копирующего присваивания
+	// Executing a copy assignment instruction
 	void basic_register_machine::copy_assignment_instruction::execute(basic_register_machine& brm) {
 
 		++brm._carriage;
@@ -663,50 +674,64 @@ namespace IMD {
 		catch (...) {}
 	}
 
-	// Конструктор
+	// Constructor
 	basic_register_machine::condition_instruction::condition_instruction(const std::string& compared_register, size_t goto_true, size_t goto_false) noexcept :
 		instruction(), _compared_register(compared_register), _goto_true(goto_true), _goto_false(goto_false) {
 		this->_description = IF + " " + this->_compared_register + " " + EQUAL + " 0 " + THEN + " " + GOTO + " " + std::to_string(this->_goto_true) + " " + ELSE + " " + GOTO + " " + std::to_string(this->_goto_false);
 	}
-	// Выполнение условной инструкции
+	// Executing a conditional instruction
 	void basic_register_machine::condition_instruction::execute(basic_register_machine& brm) noexcept {
 		if (brm._registers[this->_compared_register] == 0) brm._carriage = this->_goto_true;
 		else brm._carriage = this->_goto_false;
 	}
 
-	// Конструктор
+	// Constructor
 	basic_register_machine::stop_instruction::stop_instruction() noexcept : instruction() {
 		this->_description = STOP;
 	}
-	// Выполнение остановочной инструкции
+	// Executing a stop instruction
 	void basic_register_machine::stop_instruction::execute(basic_register_machine& brm) noexcept {
 		brm._is_stopped = true;
 	}
 
-	// Конструктор
+	// Constructor
 	basic_register_machine::extended_condition_instruction::extended_condition_instruction(const std::string& compared_register, size_t compared_value, size_t goto_true, size_t goto_false) noexcept : _compared_value(compared_value), condition_instruction(compared_register, goto_true, goto_false) {
 		this->_description = IF + " " + this->_compared_register + " " + EQUAL + " " + std::to_string(this->_compared_value) + " " + THEN + " " + GOTO + " " + std::to_string(this->_goto_true) + " " + ELSE + " " + GOTO + " " + std::to_string(this->_goto_false);
 	}
-	// Выполнение расширенной условной инструкции
+	// Executing a extended conditional instruction
 	void basic_register_machine::extended_condition_instruction::execute(basic_register_machine& brm) noexcept {
 		if (brm._registers[this->_compared_register] == _compared_value) brm._carriage = this->_goto_true;
 		else brm._carriage = this->_goto_false;
 	}
 
-	// Конструктор
+	// Constructor
 	basic_register_machine::goto_instruction::goto_instruction(size_t mark) noexcept : instruction(), _target_mark(mark) {
 		this->_description = GOTO + " " + std::to_string(this->_target_mark);
 	}
-	// Выполнение инструкции передвижения
+	// Executing a goto instruction
 	void basic_register_machine::goto_instruction::execute(basic_register_machine& brm) noexcept {
 		brm._carriage = this->_target_mark;
 	}
 
-	//Конструктор
+	// Constructor
+	extended_register_machine::composition_instruction::composition_instruction(const std::string& include_filename) noexcept : instruction(), _include_filename(include_filename) {
+		this->_description = COMPOSITION + " " + this->_include_filename;
+	}
+
+	// Executing a composition instruction
+	void extended_register_machine::composition_instruction::execute(basic_register_machine& brm) noexcept {
+		auto erm = dynamic_cast<extended_register_machine*>(&brm);
+		if (erm == NULL)
+			throw std::runtime_error("");
+
+		erm->_file_stack.push({ this->_include_filename, std::nullopt });
+	}
+
+	// Constructor
 	basic_register_machine::move_assignment_instruction::move_assignment_instruction(const std::string& to_register, const std::string& from_register) noexcept : instruction(), _to_register(to_register), _from_register(from_register) {
 		this->_description = this->_to_register + " " + MOVE + " " + this->_from_register;
 	}
-	// Выполнение инструкции перемещения
+	// Executing move assignment instruction
 	void basic_register_machine::move_assignment_instruction::execute(basic_register_machine& brm) {
 		++brm._carriage;
 		brm._registers[this->_to_register] = brm._registers[this->_from_register];
@@ -714,12 +739,12 @@ namespace IMD {
 		return;
 	}
 
-	// Реализация базовой РМ
+	// Implementation of the basic register machine
 
-	// Конструктор
+	// Constructor
 	basic_register_machine::basic_register_machine(const std::string& filename, bool is_verbose) noexcept : _filename(filename), _is_verbose(is_verbose), _carriage(0), _registers(), _instructions(), _output_registers(), _is_stopped(false) {}
 
-	// Запуск РМ
+	// Launch of RM
 	void basic_register_machine::run() {
 		this->load_all_instructions();
 
@@ -732,7 +757,7 @@ namespace IMD {
 		this->print_output_registers(" "); // Вывод выходных регистров
 	}
 
-	// Сброс РМ
+	// Reset RM
 	void basic_register_machine::reset() {
 		this->_carriage = 0;
 		this->_registers.clear();
@@ -744,69 +769,65 @@ namespace IMD {
 		this->_is_verbose = false;
 	}
 
-	// Печать входных регистров без перехода на новую строку
+	// Print input registers separated by a separator without a new line
 	void basic_register_machine::print_input_registers(const std::string& separator) const noexcept {
 		for (const auto& reg : this->_input_registers) std::cout << reg << ": " << this->_registers.at(reg) << separator;
 	}
-	// Печать входных регистров с переходом на новую строку
+	// Print input registers separated by a separator and go to a new line
 	void basic_register_machine::println_input_registers(const std::string& separator) const noexcept {
 		basic_register_machine::print_input_registers(separator);
 		std::cout << std::endl;
 	}
 
-	// Печать всех регистров без перехода на новую строку
+	// Print all registers separated by a separator without a new line
 	void basic_register_machine::print_all_registers(const std::string& separator) const noexcept {
 		for (const auto& [x, y] : this->_registers) std::cout << x << ": " << y << separator;
 	}
-	// Печать всех регистров с переходом на новую строку
+	// Print all registers separated by a separator and go to a new line
 	void basic_register_machine::println_all_registers(const std::string& separator) const noexcept {
 		basic_register_machine::print_all_registers(separator);
 		std::cout << std::endl;
 	}
 
-	// Печать выходных регистров без перехода на новую строку
+	// Print output registers separated by a separator without a new line
 	void basic_register_machine::print_output_registers(const std::string& separator) const noexcept {
 		for (const auto& x : this->_output_registers)
 			std::cout << x << ": " << this->_registers.at(x) << separator;
 	}
-	// Печать выходных регистров с переходом на новую строку
+	// Print output registers separated by a separator and go to a new line
 	void basic_register_machine::println_output_registers(const std::string& separator) const noexcept {
 		basic_register_machine::print_output_registers(separator);
 		std::cout << std::endl;
 	}
 
-	// Печать каретки без перехода на новую строку
+	// Print carriage separated by a separator without a new line
 	void basic_register_machine::print_carriage() const noexcept {
 		std::cout << "carriage: " << this->_carriage;
 	}
-	// Печать каретки с переходом на новую строку
+	// Print carriage separated by a separator and go to a new line
 	void basic_register_machine::println_carriage() const noexcept {
 		basic_register_machine::print_carriage();
 		std::cout << std::endl;
 	}
 
-	// Загрузка всех команд
-	void basic_register_machine::load_all_instructions(size_t start_position, int border) {
+	// Load all instuctions
+	void basic_register_machine::load_all_instructions(std::streampos start_position, int border) {
 		std::ifstream ifs(this->_filename);
 		ifs.seekg(start_position, border);
 		std::string line;
 
-		if (!ifs) // Выброс исключения, если файл не найден
-			throw std::runtime_error("Error processing file");
+		if (!ifs)
+			throw std::runtime_error("Filename: " + this->_filename + ". Error processing file");
 
-		// Чтение входных регистров
 		while (std::getline(ifs, line)) {
 			remove_comment(line);
-			if (line.empty()) continue;
-			else {
-				this->parse_input_registers(line);
-				break;
-			}
+			if (!line.empty()) break;
 		}
 
-		// Чтение строк с инструкциями
-		size_t expected_number{ 0 }; // Ожидаемый номер метки
-		while (std::getline(ifs, line)) {
+		this->parse_input_registers(line); // Processing input registers
+
+		size_t expected_number{ 0 }; // Instructions must be numbered sequentially
+		while (std::getline(ifs, line)) { // Processing instructions
 
 			remove_comment(line);
 			if (line.empty()) continue;
@@ -822,9 +843,14 @@ namespace IMD {
 			trim(number);
 
 			if (number.empty())
-				throw std::invalid_argument("Filename: " + this->_filename + ", the instructions doesn't have a number");
+				throw std::invalid_argument("Filename: " + this->_filename + ". Expected an instruction with the number " + std::to_string(expected_number));
+
+			if (!is_non_negative_literal(number))
+				throw std::invalid_argument("Filename: " + this->_filename + ". The instruction must be numbered with a non-negative integer");
+
 			if (std::stoi(number) != expected_number)
-				throw std::invalid_argument("Filename: " + this->_filename + ", the instructions are not written in sequence");
+				throw std::invalid_argument("Filename: " + this->_filename + ". Instructions must be numbered sequentially");
+
 			try {
 				basic_lexer lexer(instruction);
 				auto tokens = lexer.tokenize();
@@ -833,32 +859,32 @@ namespace IMD {
 				this->_instructions.push_back(std::move(instruction_pointer));
 			}
 			catch (const std::exception& e) {
-				throw std::runtime_error("Filename: " + this->_filename + ", invalid instruction at line " + std::to_string(expected_number) + ": " + e.what());
+				throw std::runtime_error("Filename: " + this->_filename + ". Invalid instruction at line " + std::to_string(expected_number) + ": " + e.what());
 			}
 
 			++expected_number;
 		}
 
-		// Чтение выходных регистров
-		this->parse_output_registers(line);
+		this->parse_output_registers(line); // Processing output registers
 
-		// Проверка, что после выходных аргументов ничего нет
+		// There should be no extra entries after the output registers
 		while (std::getline(ifs, line)) {
 			remove_comment(line);
 			if (!line.empty())
-				throw std::invalid_argument("Filename: " + this->_filename + ", unexpected data after output registers");
+				throw std::invalid_argument("Filename: " + this->_filename + ". There should be no extra entries after the output registers");
 		}
 	}
 
-	// Выполнение всех инструкций
+	// Follow all instructions
 	void basic_register_machine::execute_all_instructions() {
 		while (!this->_is_stopped) {
+
 			if (this->_carriage >= this->_instructions.size())
-				throw std::runtime_error("The register machine is stuck in a loop");
+				throw std::runtime_error("Filename: " + this->_filename + ". The register machine is stuck in a loop");
+
 			const auto& current_instruction = this->_instructions[this->_carriage];
 
-			// Вывод текущего состояния РМ
-			if (this->_is_verbose) {
+			if (this->_is_verbose) { // Print the current state of the register machine
 				this->println_all_registers();
 				std::cout << this->_carriage << ": " << this->_instructions[this->_carriage]->description() << std::endl;
 			}
@@ -867,75 +893,65 @@ namespace IMD {
 		}
 	}
 
-
-	// Проверка корректности формата строки с входными регистрами
-	bool basic_register_machine::is_valid_input_registers_line(const std::string& instruction) const noexcept {
-		std::string pattern{ R"(^\s*(\w+)(\s+\w+)*\s*$)"s };
-		std::regex regex{ pattern };
-		return std::regex_match(instruction, regex);
-	}
-	// Проверка корректности формата строки с выходными регистрами
-	bool basic_register_machine::is_valid_output_registers_line(const std::string& instruction) const noexcept {
-		std::string pattern{ R"(^\s*(\w+)(\s+\w+)*\s*$)"s };
-		std::regex regex{ pattern };
-		return std::regex_match(instruction, regex);
-	}
-
-	// Парсинг входных регистров
+	// Parsing input registers
 	void basic_register_machine::parse_input_registers(const std::string& line) {
-		if (!this->is_valid_input_registers_line(line))
-			throw std::runtime_error("Filename: " + this->_filename + ", the line does not contain input registers");
-
 		std::string variable;
 		std::istringstream iss(line);
+
 		while (iss >> variable) {
+			if (!is_register(variable))
+				throw std::runtime_error("Filename: " + this->_filename + ". The input register string contains a non-register value");
+
 			this->_input_registers.push_back(variable);
 			this->_registers.try_emplace(variable, 0);
 		}
 	}
 
-	// Парсинг выходных регистров
+	// Parsing output registers
 	void basic_register_machine::parse_output_registers(const std::string& line) {
-		if (!this->is_valid_output_registers_line(line))
-			throw std::runtime_error("Filename: " + this->_filename + ", the line does not contain output registers");
-
 		std::string variable;
 		std::istringstream iss(line);
 		while (iss >> variable) {
+			if (!is_register(variable))
+				throw std::runtime_error("Filename: " + this->_filename + ". The output register string contains a non-register value");
+
 			this->_output_registers.push_back(variable);
 			this->_registers.try_emplace(variable, 0);
 		}
 	}
 
-	// Реализация расширенной РМ
+	// Implementation of an extended register machine
 
-	// Конструктор
+	// Constructor
 	extended_register_machine::extended_register_machine(const std::string& filename, bool is_verbose) noexcept : basic_register_machine(filename, is_verbose), _file_stack() {}
 
-	// Запуск РМ
+	// Launch of RM
 	void extended_register_machine::run() {
-		this->_include_files(_filename); // Обрабатываем исходный файл
-		while (!this->_file_stack.empty()) {
-			auto [file, flag] = this->_file_stack.top(); // Получаем верхний файл и флаг (обработан или нет)
+		this->_include_files(_filename); // Processing all instructions of the composition from the source file
+
+		while (!this->_file_stack.empty()) { // Traverse all included files
+			auto [file, read_position] = this->_file_stack.top(); // Retrieve the top-level file and the current reading position
 			this->_file_stack.pop();
 
-			if (flag == std::nullopt)
-				this->_include_files(file); // Обрабатываем верхний файл
+			if (read_position == std::nullopt) // Processing all instructions of the composition from the top-level file
+				this->_include_files(file);
 			else {
-				std::vector<int> results{}; // Вектор промежуточных результатов
+				std::vector<int> results{}; // Vector of intermediate results
+
 				for (const auto& x : this->_output_registers)
 					results.push_back(this->_registers[x]);
 				auto is_verbose = this->_is_verbose;
 
-				// Обновление состояния РМ перед новым запуском
+				// Updating the register machine state before a new run
 				this->reset();
 				this->_filename = file;
 				this->_is_verbose = is_verbose;
-				this->load_all_instructions(flag.value());
+				this->load_all_instructions(read_position.value());
 
-				if (results.size() > 0) { // Если есть сохранённые результаты, передаем их во входные регистры
-					if (results.size() < this->_input_registers.size()) // Проверка на соотношение входов и выходов связанных РМ
-						throw std::runtime_error("Not enough input values for arguments");
+				if (!results.empty()) { // If there are intermediate results, pass them into the input registers
+
+					if (results.size() < this->_input_registers.size()) // Check the correspondence between the number of inputs and outputs of the connected register machines
+						throw std::runtime_error("Filename: " + this->_filename + ". Not enough input values for arguments");
 
 					size_t index{ 0 };
 					for (const auto& x : this->_input_registers) {
@@ -943,7 +959,7 @@ namespace IMD {
 						++index;
 					}
 				}
-				else { // Если результатов нет (первый запуск), запрашиваем значения для входных регистров у пользователя
+				else { // If there are no intermediate results (first run), prompt the user to enter values for the input registers
 					for (const auto& x : this->_input_registers) {
 						std::cout << "Введите значения для " << x << ": ";
 						std::cin >> this->_registers[x];
@@ -953,35 +969,31 @@ namespace IMD {
 				if (this->_is_verbose)
 					std::cout << this->_filename << std::endl;
 
-				this->execute_all_instructions(); // Выполнение верхнего файла
+				this->execute_all_instructions(); // Executing the instructions of the top-level file
 			}
 		}
-		this->print_output_registers(" "); // После выполнения всех файлов выводим значения выходных регистров
+		this->print_output_registers(" "); // After executing all files, display the values of the output registers
 	}
 
-	// Загрузка всех команд
-	void extended_register_machine::load_all_instructions(size_t start_position, int border) {
+	// Load all instructions
+	void extended_register_machine::load_all_instructions(std::streampos start_position, int border) {
 		std::ifstream ifs(this->_filename);
+
+		if (!ifs)
+			throw std::runtime_error("Filename: " + this->_filename + ". Error processing file");
+
 		ifs.seekg(start_position, border);
 		std::string line;
 
-		if (!ifs) // Выброс исключения, если файл не найден
-			throw std::runtime_error("Filename: " + this->_filename + ", error processing file");
-
-
-		while (std::getline(ifs, line)) {// Команда композиции не является инструкцией, поэтому пропускаем её
+		while (std::getline(ifs, line)) { // Skipping blank lines between composition instructions and input registers
 			remove_comment(line);
-
-			if (this->is_valid_input_registers_line(line)) break;
+			if (!line.empty()) break;
 		}
 
+		this->parse_input_registers(line); // Processing input registers
 
-		// Обработка входных регистров
-		this->parse_input_registers(line);
-
-		// Последующие строки, за исключением последней, содержат метки
-
-		size_t expected_number{ 0 };
+		// Processing all instuctions
+		size_t expected_number{ 0 }; // Instructions must be numbered sequentially
 		while (std::getline(ifs, line)) {
 			remove_comment(line);
 			if (line.empty()) continue;
@@ -996,8 +1008,15 @@ namespace IMD {
 			trim(instruction);
 			trim(number);
 
-			if (number.empty() || std::stoi(number) != expected_number)
-				throw std::invalid_argument("Filename: " + this->_filename + ", the instructions are not written in sequence");
+
+			if (number.empty())
+				throw std::invalid_argument("Filename: " + this->_filename + ". Expected an instruction with the number " + std::to_string(expected_number));
+
+			if (!is_non_negative_literal(number))
+				throw std::invalid_argument("Filename: " + this->_filename + ". The instruction must be numbered with a non-negative integer");
+
+			if (std::stoi(number) != expected_number)
+				throw std::invalid_argument("Filename: " + this->_filename + ". Instructions must be numbered sequentially");
 
 			try {
 				extended_lexer lexer(instruction);
@@ -1007,24 +1026,26 @@ namespace IMD {
 				this->_instructions.push_back(std::move(instr_ptr));
 			}
 			catch (const std::exception& e) {
-				throw std::runtime_error("Filename: " + this->_filename + ", invalid instruction at line " + std::to_string(expected_number) + ": " + e.what());
+				throw std::runtime_error("Filename: " + this->_filename + ". Invalid instruction at line " + std::to_string(expected_number) + ": " + e.what());
 			}
 
 			++expected_number;
 		}
 
-		// В последней строке описываются выходные регистры
+		// Processing output registers
 		this->parse_output_registers(line);
 	}
 
-	// Выполнение всех команд
+	// Follow all instuctions
 	void extended_register_machine::execute_all_instructions() {
 
 		while (!this->_is_stopped) {
 			const auto& current_instruction = this->_instructions[this->_carriage];
 
-			// Вывод текущего состояния РМ
-			if (this->_is_verbose) {
+			if (this->_carriage >= this->_instructions.size())
+				throw std::runtime_error("Filename: " + this->_filename + ". The register machine is stuck in a loop");
+
+			if (this->_is_verbose) { // Print the current state of the register machine
 				this->println_all_registers(" ");
 				std::cout << this->_carriage << ": " << this->_instructions[this->_carriage]->description() << std::endl;
 			}
@@ -1033,119 +1054,123 @@ namespace IMD {
 		}
 	}
 
-
-	// Обработка всех команд композиции в текущем файла и добавление включаемых файлов в стек
+	// Process all composition insturctions in the given file and add the included files to the stack
 	void extended_register_machine::_include_files(const std::string& filename) {
-		std::ifstream ifs(filename, std::ios::binary);
-		if (!ifs) return;
+		std::ifstream input_file(filename, std::ios::binary);
+		if (!input_file)
+			return;
 
-		// 1. Считаем файл с конца вверх, ищем все строки с COMPOSITION
-		std::vector<std::unique_ptr<basic_register_machine::instruction>> compositions_from_end;
-		bool separator_found = false;
+		constexpr size_t READ_BUFFER_SIZE = 4096; // 4 KB - standard read block
 
-		ifs.seekg(0, std::ios::end);
-		auto filesize = ifs.tellg();
+		std::vector<std::unique_ptr<basic_register_machine::instruction>> composition_instructions{};
 
-		size_t buffer_size = 4096;
-		size_t pos = filesize;
-		std::string line_buffer;
+		bool composition_block_ended = false;
 
-		while (pos > 0 && !separator_found) {
-			size_t read_size = (pos >= buffer_size) ? buffer_size : pos;
-			pos -= read_size;
-			ifs.seekg(pos);
-			std::vector<char> buf(read_size);
-			ifs.read(buf.data(), read_size);
+		// Determining the file size
+		input_file.seekg(0, std::ios::end);
+		std::streamoff file_size = input_file.tellg();
 
-			for (int i = read_size - 1; i >= 0; --i) {
-				char c = buf[i];
-				if (c == '\n') {
-					std::reverse(line_buffer.begin(), line_buffer.end());
-					remove_comment(line_buffer);
-					if (!line_buffer.empty()) {
-						if (line_buffer.find(SEPARATOR) != std::string::npos) {
-							separator_found = true;
-							break;
-						}
-						// Лексер и парсер для проверки COMPOSITION
+		// Buffer for accumulating characters of the line that we read from the end of the file
+		std::string reversed_line_buffer;
+		std::streamoff read_position{ file_size }; // Current reading position pointer
+
+		// Reading a file from the end
+		// We go through the file in blocks by READ_BUFFER_SIZE, moving backwards
+		while (read_position > 0 && !composition_block_ended) {
+			// We determine the size of the current block (if there is a piece smaller than READ_BUFFER_SIZE left, we read it entirely)
+			size_t current_chunk_size = (read_position >= READ_BUFFER_SIZE) ? READ_BUFFER_SIZE : static_cast<size_t>(read_position);
+			read_position -= current_chunk_size;
+			input_file.seekg(read_position);
+
+			// Reading a block of data into a buffer
+			std::vector<char> read_buffer(current_chunk_size);
+			input_file.read(read_buffer.data(), current_chunk_size);
+
+			// We go through the block from the end to the beginning (since we read the file from the end)
+			for (int i = static_cast<int>(current_chunk_size) - 1; i >= 0; --i) {
+				char ch = read_buffer[i];
+				if (ch == '\n') {
+					// End of line encountered - reverse the accumulated buffer, since the characters were added in reverse order
+					std::reverse(reversed_line_buffer.begin(), reversed_line_buffer.end());
+					remove_comment(reversed_line_buffer);
+					if (!reversed_line_buffer.empty()) {
 						try {
-							extended_lexer lexer(line_buffer);
+							extended_lexer lexer(reversed_line_buffer);
 							auto tokens = lexer.tokenize();
 							extended_parser parser(tokens);
 							auto instr_ptr = parser.make_instruction();
-							compositions_from_end.push_back(std::move(instr_ptr));
+							if (instr_ptr == NULL)
+								break;
+
+							composition_instructions.push_back(std::move(instr_ptr));
 						}
 						catch (...) {
-							// Игнорируем ошибки, если строка не COMPOSITION
+							composition_block_ended = true;
+							break;
 						}
 					}
-					line_buffer.clear();
+					reversed_line_buffer.clear();
 				}
-				else {
-					line_buffer.push_back(c);
+				else reversed_line_buffer.push_back(ch);
+			}
+		}
+
+		// Process the last row if it has not been processed
+		if (!reversed_line_buffer.empty() && !composition_block_ended) {
+			std::reverse(reversed_line_buffer.begin(), reversed_line_buffer.end());
+			remove_comment(reversed_line_buffer);
+			if (!reversed_line_buffer.empty()) {
+				try {
+					extended_lexer lexer(reversed_line_buffer);
+					auto tokens = lexer.tokenize();
+					extended_parser parser(tokens);
+					auto instr_ptr = parser.make_instruction();
+					if (instr_ptr)
+						composition_instructions.push_back(std::move(instr_ptr));
+				}
+				catch (...) {
+					composition_block_ended = true;
 				}
 			}
 		}
 
-		// Обработка оставшейся строки после цикла
-		if (!line_buffer.empty() && !separator_found) {
-			std::reverse(line_buffer.begin(), line_buffer.end());
-			remove_comment(line_buffer);
-			if (!line_buffer.empty()) {
-				if (line_buffer.find(SEPARATOR) != std::string::npos)
-					separator_found = true;
-				else {
-					try {
-						extended_lexer lexer(line_buffer);
-						auto tokens = lexer.tokenize();
-						extended_parser parser(tokens);
-						auto instr_ptr = parser.make_instruction();
-						if (!instr_ptr && tokens.size() >= 2) {
-							compositions_from_end.push_back(std::move(instr_ptr));
-						}
-					}
-					catch (...) {}
-				}
-			}
-		}
 
-		// Добавляем файлы в стек в обратном порядке
-		for (auto it = compositions_from_end.rbegin(); it != compositions_from_end.rend(); ++it)
+		for (auto it = composition_instructions.rbegin(); it != composition_instructions.rend(); ++it)
 			(*it)->execute(*this);
 
-		// 2. Если нашли разделитель, читаем файл с начала вниз и собираем все строки с COMPOSITION
-		if (separator_found) {
-			ifs.clear();
-			ifs.seekg(0, std::ios::beg);
+		composition_instructions.clear();
 
-			std::vector<std::unique_ptr<instruction>> compositions_from_start;
+		if (composition_block_ended) {
+			input_file.clear(); // Resetting the flow flags
+			input_file.seekg(0, std::ios::beg);
+
 			std::string line;
-			std::streampos last_pos = ifs.tellg();
+			std::streampos position_after_block = input_file.tellg();
 
-			while (std::getline(ifs, line)) {
+			while (std::getline(input_file, line)) {
 				remove_comment(line);
-				if (line.empty()) continue;
+				if (line.empty())
+					continue;
 
-				// Лексер и парсер для проверки COMPOSITION
 				try {
 					extended_lexer lexer(line);
 					auto tokens = lexer.tokenize();
 					extended_parser parser(tokens);
 					auto instr_ptr = parser.make_instruction();
-					compositions_from_start.push_back(std::move(instr_ptr));
-					last_pos = ifs.tellg();
+					if (instr_ptr == NULL)
+						break;
+
+					composition_instructions.push_back(std::move(instr_ptr));
+					position_after_block = input_file.tellg();
 				}
 				catch (...) {
-					break; // Не COMPOSITION - конец блока
+					break;
 				}
 			}
-
-			// Позиция после последней строки с COMPOSITION
-			this->_file_stack.push({ filename, last_pos });
-
-			// Добавляем файлы в стек в обратном порядке
-			for (auto it = compositions_from_start.rbegin(); it != compositions_from_start.rend(); ++it)
-				(*it)->execute(*this);
+			this->_file_stack.push({ filename, position_after_block });
 		}
+
+		for (auto it = composition_instructions.rbegin(); it != composition_instructions.rend(); ++it)
+			(*it)->execute(*this);
 	}
 }
