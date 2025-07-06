@@ -1,4 +1,4 @@
-x y
-0: x <<- y
+x
+0: x <- x + x
 1: stop
-x y
+x

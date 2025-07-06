@@ -33,11 +33,23 @@ namespace IMD {
 
 	// Вспомогательные методы
 
-	// Удаление лишних пробелов слева и справа от строки
-	void trim(std::string& line);
+	// Удаление лишних пробелов слева и справа от исходной строки
+	void trim(std::string& line) noexcept;
+
+	// Возвращает новую строку без лишних пробелов слева и справа от исходной
+	std::string_view trim(std::string_view line) noexcept;
 
 	// Проверка, что в строке записан регистр
 	bool is_register(const std::string& line) noexcept;
+
+	// Проверка, что в строке записан неотрицательный целый литерал
+	bool is_literal(const std::string& line) noexcept;
+
+	// Проверка, что в строке записано название файла с расширением
+	bool is_filename(const std::string& line) noexcept;
+
+	// Удаление комментария в строке
+	void remove_comment(std::string& line) noexcept;
 
 	// Описание инструкций
 
@@ -113,6 +125,18 @@ namespace IMD {
 		void execute(basic_register_machine& brm) noexcept override;
 	};
 
+	// Класс инструкции композиции
+	class composition_instruction : public instruction {
+	public:
+		// Конструктор
+		composition_instruction() noexcept;
+		// Деструктор
+		~composition_instruction() override = default;
+
+		// Выполнение остановочной инструкции
+		void execute(basic_register_machine& brm) noexcept override;
+	};
+
 	// Класс расширенной условной инструкции
 	class extended_condition_instruction : public condition_instruction {
 	protected:
@@ -172,6 +196,7 @@ namespace IMD {
 		keyword_stop, // STOP
 		keyword_composition, // COMPOSITION
 		eof, // END OF FILE OR LINE
+		filename,
 		unknown
 	};
 
@@ -231,17 +256,6 @@ namespace IMD {
 			// Возвращает следующий токен
 			virtual std::optional<token> next_token();
 
-			// Парсинг регистра или ключевого слова
-			virtual token parse_register_or_keyword();
-
-			// Парсинг литерала
-			virtual token parse_literal();
-
-			// Парсинг оператора копирующего присваивания
-			virtual token parse_operator_copy_assignment();
-
-			// Парсинг оператора сравнения на равенство
-			virtual token parse_operator_equal();
 		};
 		class basic_parser {
 		protected:
@@ -254,13 +268,13 @@ namespace IMD {
 			// Возвращает текущий токен
 			const token& preview() const;
 
-			virtual instruction_ptr parse_instruction(basic_register_machine& rm);
+			virtual instruction_ptr parse_instruction();
 
-			virtual instruction_ptr parse_stop_instruction(basic_register_machine& rm);
+			virtual instruction_ptr parse_stop_instruction();
 
-			virtual instruction_ptr parse_condition_instruction(basic_register_machine& rm);
+			virtual instruction_ptr parse_condition_instruction();
 
-			virtual instruction_ptr parse_copy_assignment_instruction(basic_register_machine& rm);
+			virtual instruction_ptr parse_copy_assignment_instruction();
 
 			bool is_type_match(const token_type& type) const noexcept;
 
@@ -349,27 +363,29 @@ namespace IMD {
 	class extended_register_machine : public basic_register_machine {
 	protected:
 
+		// Класс расширенного лексера
 		class extended_lexer : public basic_lexer {
 		public:
 			// Конструктор
 			explicit extended_lexer(const std::string& line) noexcept;
 
-			// Парсинг оператора копирующего присваивания
-			virtual token parse_operator_move_assignment();
-
-			// 
+			// Возвращает следующий токен
 			std::optional<token> next_token() override;
 		};
+
+		// Класс расширенного парсера
 		class extended_parser : public basic_parser {
 		public:
 			explicit extended_parser(const std::vector<token>& tokens) noexcept;
 
-			instruction_ptr parse_instruction(basic_register_machine& rm) override;
+			instruction_ptr parse_instruction() override;
 
-			virtual instruction_ptr parse_move_assignment_instruction(basic_register_machine& rm);
-			virtual instruction_ptr parse_goto_assignment_instruction(basic_register_machine& rm);
-			instruction_ptr parse_copy_assignment_instruction(basic_register_machine& rm) override;
+			virtual instruction_ptr parse_move_assignment_instruction();
+			virtual instruction_ptr parse_goto_assignment_instruction();
+			instruction_ptr parse_copy_assignment_instruction() override;
 		};
+
+
 
 	protected:
 		// Стек для управления порядком обработки файлов РМ: пара <имя файла, флаг обработки всех COMPOSITION>
@@ -395,9 +411,6 @@ namespace IMD {
 
 		// Выполнение всех инструкций
 		void execute_all_instructions() override;
-
-		// Проверка корректности формата команды композицииэ
-		bool is_valid_composition_command(const std::string& command) const noexcept;
 
 		// Обработка всех команд композиции в текущем файла и добавление включаемых файлов в стек
 		void _include_files(const std::string& filename);
