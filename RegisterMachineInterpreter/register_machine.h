@@ -15,7 +15,7 @@ using namespace std::string_literals;
 
 #define SEPARATOR ":"s
 #define COPY "<-"s
-#define MOVE "~!"s
+#define MOVE "<<-"s
 #define PLUS "+"s
 #define MINUS "-"s
 #define STOP "stop"s
@@ -24,7 +24,6 @@ using namespace std::string_literals;
 #define THEN "then"s
 #define GOTO "goto"s
 #define EQUAL "=="s
-#define RESET "reset"s
 #define COMPOSITION "call"s
 #define COMMENT "#"s
 

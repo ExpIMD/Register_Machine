@@ -5,7 +5,7 @@
 int main() {
 	setlocale(LC_ALL, "Russian");
 
-	std::string filename{ "RM1.txt" };
+	std::string filename{ "RM4.txt" };
 	IMD::extended_register_machine RM(filename, true);
 
 	try {

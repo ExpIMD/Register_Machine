@@ -11,7 +11,7 @@ namespace IMD {
 	// Реализация токена
 
 	// Конструктор
-	basic_register_machine::token::token(const token_type& type, const std::string& text) noexcept: _type(type), _text(text) {}
+	basic_register_machine::token::token(const token_type& type, const std::string& text) noexcept : _type(type), _text(text) {}
 
 	// Возвращает тип токена
 	const token_type& basic_register_machine::token::type() const noexcept {
@@ -48,23 +48,32 @@ namespace IMD {
 		if (this->eof())
 			return std::nullopt;
 
-		char c = this->_line[this->_carriage];
-		if (std::isalpha(c))
+		static const std::vector<std::pair<std::string, token_type>> keyword_type_pairs = {
+			{COPY, token_type::operator_copy_assignment},
+			{EQUAL, token_type::operator_equal},
+			{PLUS, token_type::operator_plus},
+			{MINUS, token_type::operator_minus},
+			{STOP, token_type::keyword_stop},
+			{IF, token_type::keyword_if},
+			{THEN, token_type::keyword_then},
+			{ELSE, token_type::keyword_else},
+			{GOTO, token_type::keyword_else},
+		};
+
+		for (const auto& [keyword, type] : keyword_type_pairs) {
+			if (this->_line.size() - this->_carriage >= keyword.size() &&
+				this->_line.compare(this->_carriage, keyword.size(), keyword) == 0) {
+				this->_carriage += keyword.size();
+				return token{ type, keyword };
+			}
+		}
+
+		char first = this->_line[this->_carriage];
+
+		if (std::isalpha(first))
 			return this->parse_register_or_keyword();
-		if (std::isdigit(c))
+		if (std::isdigit(first))
 			return this->parse_literal();
-		if (c == COPY[0]) // Смотрим только по первым символам - плохо...
-			return parse_operator_copy_assignment();
-		if (c == PLUS[0]) {
-			++this->_carriage;
-			return token{ token_type::operator_plus, PLUS };
-		}
-		if (c == MINUS[0]) {
-			++this->_carriage;
-			return token{ token_type::operator_minus, MINUS };
-		}
-		if (c == EQUAL[0])
-			return parse_operator_equal();
 
 		return std::nullopt;
 	}
@@ -102,7 +111,7 @@ namespace IMD {
 		return { token_type::literal, std::string(this->_line.substr(start, this->_carriage - start)) };
 	}
 
-	// Парсинг операторов копирующего и перемещающего присваивания
+	// Парсинг операторов копирующего присваивания
 	basic_register_machine::token basic_register_machine::basic_lexer::parse_operator_copy_assignment() {
 		if (this->_carriage + COPY.length() - 1 < this->_line.size()) {
 			if (this->_line.substr(this->_carriage, COPY.length()) == COPY) {
@@ -155,31 +164,39 @@ namespace IMD {
 		if (this->eof())
 			return std::nullopt;
 
-		char c = this->_line[this->_carriage];
-		if (std::isalpha(c))
+		static const std::vector<std::pair<std::string, token_type>> keyword_type_pairs = {
+			{COPY, token_type::operator_copy_assignment},
+			{MOVE, token_type::operator_move_assignment},
+			{EQUAL, token_type::operator_equal},
+			{PLUS, token_type::operator_plus},
+			{MINUS, token_type::operator_minus},
+			{STOP, token_type::keyword_stop},
+			{IF, token_type::keyword_if},
+			{THEN, token_type::keyword_then},
+			{ELSE, token_type::keyword_else},
+			{GOTO, token_type::keyword_else},
+		};
+
+		for (const auto& [keyword, type] : keyword_type_pairs) {
+			if (this->_line.size() - this->_carriage >= keyword.size() &&
+				this->_line.compare(this->_carriage, keyword.size(), keyword) == 0) {
+				this->_carriage += keyword.size();
+				return token{ type, keyword };
+			}
+		}
+
+		char first = this->_line[this->_carriage];
+
+		if (std::isalpha(first))
 			return this->parse_register_or_keyword();
-		if (std::isdigit(c))
+		if (std::isdigit(first))
 			return this->parse_literal();
-		if (c == '<') // TODO: МАКРОСЫ
-			return parse_operator_copy_assignment();
-		if (c == '~')
-			return parse_operator_move_assignment();
-		if (c == '+') {
-			++this->_carriage;
-			return token{ token_type::operator_plus, PLUS };
-		}
-		if (c == '-') {
-			++this->_carriage;
-			return token{ token_type::operator_minus, MINUS };
-		}
-		if (c == '=')
-			return parse_operator_equal();
 
 		return std::nullopt;
 	}
 
 	// Реализация расширенного парсерса
-	
+
 	// Конструктор
 	extended_register_machine::extended_parser::extended_parser(const std::vector<token>& tokens) noexcept : basic_parser(tokens) {};
 
@@ -251,7 +268,7 @@ namespace IMD {
 
 		if (from_register_token.type() != token_type::variable)
 			throw std::runtime_error("Expected register after '"s + MOVE + "'"s);
-		
+
 		return std::make_unique<move_assignment_instruction>(
 			to_register_token.text(),
 			from_register_token.text());
@@ -482,7 +499,7 @@ namespace IMD {
 			if (right_operand_token.text() != "1")
 				throw std::runtime_error("Only increment by 1 is allowed");
 
-			return std::make_unique<copy_assignment_instruction>(				
+			return std::make_unique<copy_assignment_instruction>(
 				target_token.text(),
 				copy_assignment_instruction::operation::plus,
 				left_operand_token.text(),
@@ -498,7 +515,7 @@ namespace IMD {
 			if (right_operand_token.text() != "1")
 				throw std::runtime_error("Only decrement by 1 is allowed");
 
-			return std::make_unique<copy_assignment_instruction>(				
+			return std::make_unique<copy_assignment_instruction>(
 				target_token.text(),
 				copy_assignment_instruction::operation::minus,
 				left_operand_token.text(),
@@ -588,7 +605,7 @@ namespace IMD {
 	}
 
 	// Конструктор
-	copy_assignment_instruction::copy_assignment_instruction(const std::string& target_register, const operation& operation, const std::string& left_operand, const std::string& right_operand) noexcept:
+	copy_assignment_instruction::copy_assignment_instruction(const std::string& target_register, const operation& operation, const std::string& left_operand, const std::string& right_operand) noexcept :
 		instruction(), _target_register(target_register), _operation(operation), _left_operand(left_operand), _right_operand(right_operand) {
 		this->_description = this->_target_register + " " + COPY + " " + this->_left_operand + " " + (this->_operation == operation::plus ? PLUS : this->_operation == operation::minus ? MINUS : " ") + " " + this->_right_operand;
 	}
