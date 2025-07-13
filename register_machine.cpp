@@ -11,6 +11,8 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <stdexcept>
+#include <algorithm>
 
 namespace IMD {
 
@@ -303,6 +305,7 @@ namespace IMD {
 				throw std::runtime_error("Expected assignment operator after register");
 		}
 
+		return NULL;
 	}
 
 	std::unique_ptr<basic_register_machine::instruction> extended_register_machine::extended_parser::make_composition_command() {
@@ -719,10 +722,10 @@ namespace IMD {
 	}
 
 	// Executing a composition instruction
-	void extended_register_machine::composition_instruction::execute(basic_register_machine& brm) noexcept {
+	void extended_register_machine::composition_instruction::execute(basic_register_machine& brm) {
 		auto erm = dynamic_cast<extended_register_machine*>(&brm);
 		if (erm == NULL)
-			throw std::runtime_error("");
+			throw std::runtime_error("erasd");
 
 		erm->_file_stack.push({ this->_include_filename, std::nullopt });
 	}
@@ -811,7 +814,7 @@ namespace IMD {
 	}
 
 	// Load all instuctions
-	void basic_register_machine::load_all_instructions(std::streampos start_position, int border) {
+	void basic_register_machine::load_all_instructions(std::streampos start_position, std::ios_base::seekdir border) {
 		std::ifstream ifs(this->_filename);
 		ifs.seekg(start_position, border);
 		std::string line;
@@ -976,7 +979,7 @@ namespace IMD {
 	}
 
 	// Load all instructions
-	void extended_register_machine::load_all_instructions(std::streampos start_position, int border) {
+	void extended_register_machine::load_all_instructions(std::streampos start_position, std::ios_base::seekdir border) {
 		std::ifstream ifs(this->_filename);
 
 		if (!ifs)

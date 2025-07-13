@@ -165,7 +165,7 @@ namespace IMD {
 			~composition_instruction() override = default;
 
 			// Executing a composition instruction
-			void execute(basic_register_machine& brm) noexcept override;
+			void execute(basic_register_machine& brm) override;
 		};
 
 		// Extended conditional instruction class
@@ -384,7 +384,7 @@ namespace IMD {
 
 	protected:
 		// Load all instructions
-		virtual void load_all_instructions(std::streampos start_position = 0, int border = std::ios::beg);
+		virtual void load_all_instructions(std::streampos start_position = 0, std::ios_base::seekdir border = std::ios::beg);
 		// Follow all instructions
 		virtual void execute_all_instructions();
 
@@ -460,7 +460,7 @@ namespace IMD {
 
 	protected:
 		// Load all instruction
-		void load_all_instructions(std::streampos start_position = 0, int border = std::ios::beg) override;
+		void load_all_instructions(std::streampos start_position = 0, std::ios_base::seekdir border = std::ios::beg) override;
 
 		// Follow all instructions
 		void execute_all_instructions() override;
