@@ -47,10 +47,8 @@ x y
 
 6: y <- y - 1
 
-7: if y == 0 then goto 1 else goto 5
+7: if y == 0 then goto 8 else goto 5
 
-8: z <- z - 1
-
-9: stop
+8: stop
 
 z

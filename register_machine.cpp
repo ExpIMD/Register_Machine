@@ -25,15 +25,6 @@ namespace IMD {
 		line.erase(line.find_last_not_of(" \t\r\n") + 1);
 	}
 
-	// Returns a new string_view with leading and trailing whitespace removed from the input string_view
-	std::string_view trim(std::string_view line) noexcept {
-		size_t start = line.find_first_not_of(" \t\r\n");
-		if (start == std::string_view::npos) return {};
-		size_t end = line.find_last_not_of(" \t\r\n");
-
-		return line.substr(start, end - start + 1);
-	}
-
 	// Checks if the given string represents a valid register identifier
 	bool is_register(const std::string& line) noexcept {
 		if (line.empty())
@@ -1010,7 +1001,6 @@ namespace IMD {
 
 			trim(instruction);
 			trim(number);
-
 
 			if (number.empty())
 				throw std::invalid_argument("Filename: " + this->_filename + ". Expected an instruction with the number " + std::to_string(expected_number));

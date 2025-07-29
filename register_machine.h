@@ -40,9 +40,6 @@ namespace IMD {
 	// Removes leading and trailing whitespace characters from the given string in-place
 	void trim(std::string& line) noexcept;
 
-	// Returns a new string_view with leading and trailing whitespace removed from the input string_view
-	std::string_view trim(std::string_view line) noexcept;
-
 	// Checks if the given string represents a valid register identifier
 	bool is_register(const std::string& line) noexcept;
 
