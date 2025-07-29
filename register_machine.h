@@ -40,17 +40,20 @@ namespace IMD {
 	// Removes leading and trailing whitespace characters from the given string in-place
 	void trim(std::string& line) noexcept;
 
+	// Returns a new string_view with leading and trailing whitespace removed from the input string_view
+	std::string_view trim(std::string_view line) noexcept;
+
 	// Checks if the given string represents a valid register identifier
-	bool is_register(const std::string& line) noexcept;
+	bool is_register(std::string_view line) noexcept;
 
 	// Checks if the given string represents a non-negative integer literal
-	bool is_non_negative_literal(const std::string& line) noexcept;
+	bool is_non_negative_literal(std::string_view line) noexcept;
 
 	// Checks if the given string represents a negative integer literal
-	bool is_negative_literal(const std::string& line) noexcept;
+	bool is_negative_literal(std::string_view line) noexcept;
 
 	// Checks if the given string is a valid filename with an extension
-	bool is_filename_with_extension(const std::string& line) noexcept;
+	bool is_filename_with_extension(std::string_view line) noexcept;
 
 	// Removes comment from the given string by erasing everything after the comment marker
 	void remove_comment(std::string& line) noexcept;
@@ -121,7 +124,7 @@ namespace IMD {
 
 		public:
 			// Constructor
-			explicit copy_assignment_instruction(const std::string& target_register, const operation& operation, const std::string& left_operand, const std::string& right_operand) noexcept;
+			explicit copy_assignment_instruction(std::string_view target_register, const operation& operation, std::string_view left_operand, std::string_view right_operand) noexcept;
 
 			// Destructor
 			~copy_assignment_instruction() override = default;
@@ -142,7 +145,7 @@ namespace IMD {
 
 		public:
 			// Constructor
-			explicit condition_instruction(const std::string& compared_register, size_t goto_true, size_t goto_false) noexcept;
+			explicit condition_instruction(std::string_view compared_register, size_t goto_true, size_t goto_false) noexcept;
 
 			// Destructor
 			~condition_instruction() override = default;
@@ -156,7 +159,7 @@ namespace IMD {
 			std::string _include_filename;
 		public:
 			// Constructor
-			explicit composition_instruction(const std::string& include_filename) noexcept;
+			explicit composition_instruction(std::string_view include_filename) noexcept;
 
 			// Destructor
 			~composition_instruction() override = default;
@@ -172,7 +175,7 @@ namespace IMD {
 			size_t _compared_value;
 		public:
 			// Constructor
-			explicit extended_condition_instruction(const std::string& compared_register, size_t compared_value, size_t goto_true, size_t goto_false) noexcept;
+			explicit extended_condition_instruction(std::string_view compared_register, size_t compared_value, size_t goto_true, size_t goto_false) noexcept;
 
 			// Destructor
 			~extended_condition_instruction() override = default;
@@ -206,7 +209,7 @@ namespace IMD {
 			std::string _from_register;
 		public:
 			// Constructor
-			explicit move_assignment_instruction(const std::string& _to_register, const std::string& _from_register) noexcept;
+			explicit move_assignment_instruction(std::string_view _to_register, std::string_view _from_register) noexcept;
 
 			// Destructor
 			~move_assignment_instruction() override = default;
@@ -236,11 +239,11 @@ namespace IMD {
 			// Token type
 			token_type _type;
 			// Token content
-			std::string _text;
+			std::string_view _text;
 
 		public:
 			// Constructor
-			explicit token(const token_type& type, const std::string& text) noexcept;
+			explicit token(const token_type& type, std::string_view text) noexcept;
 
 			// Destructor
 			~token() noexcept = default;
@@ -248,20 +251,20 @@ namespace IMD {
 			// Returns the token type
 			const token_type& type() const noexcept;
 			// Returns the token content
-			const std::string& text() const noexcept;
+			std::string_view text() const noexcept;
 		};
 
 		// Basic register machine lexer class
 		class basic_lexer {
 		protected:
 			// The string containing the instruction line
-			std::string _line;
+			std::string_view _line;
 			// The position indicator (carriage) for reading through the line
 			size_t _carriage;
 
 		public:
 			// Constructor
-			explicit basic_lexer(const std::string& line) noexcept;
+			explicit basic_lexer(std::string_view line) noexcept;
 
 			// Destructor
 			~basic_lexer() noexcept = default;
@@ -402,7 +405,7 @@ namespace IMD {
 		class extended_lexer : public basic_lexer {
 		public:
 			// Constructor
-			explicit extended_lexer(const std::string& line) noexcept;
+			explicit extended_lexer(std::string_view line) noexcept;
 
 			// Destructor
 			~extended_lexer() = default;

@@ -25,8 +25,17 @@ namespace IMD {
 		line.erase(line.find_last_not_of(" \t\r\n") + 1);
 	}
 
+	// Returns a new string_view with leading and trailing whitespace removed from the input string_view
+	std::string_view trim(std::string_view line) noexcept {
+		size_t start = line.find_first_not_of(" \t\r\n");
+		if (start == std::string_view::npos) return {};
+		size_t end = line.find_last_not_of(" \t\r\n");
+
+		return line.substr(start, end - start + 1);
+	}
+
 	// Checks if the given string represents a valid register identifier
-	bool is_register(const std::string& line) noexcept {
+	bool is_register(std::string_view line) noexcept {
 		if (line.empty())
 			return false;
 
@@ -41,7 +50,7 @@ namespace IMD {
 	}
 
 	// Checks if the given string represents a non-negative integer literal
-	bool is_non_negative_literal(const std::string& line) noexcept {
+	bool is_non_negative_literal(std::string_view line) noexcept {
 		if (line.empty())
 			return false;
 
@@ -52,7 +61,7 @@ namespace IMD {
 		return true;
 	}
 	// Checks if the given string represents a negative integer literal
-	bool is_negative_literal(const std::string& line) noexcept {
+	bool is_negative_literal(std::string_view line) noexcept {
 		if (line.size() < 2) // минимум '-' и одна цифра
 			return false;
 		if (line[0] != '-')
@@ -66,7 +75,7 @@ namespace IMD {
 	}
 
 	// Checks if the given string is a valid filename with an extension
-	bool is_filename_with_extension(const std::string& line) noexcept {
+	bool is_filename_with_extension(std::string_view line) noexcept {
 		std::filesystem::path p(line);
 		std::string filename = p.filename().string();
 
@@ -110,21 +119,21 @@ namespace IMD {
 	// Implementation of a token
 
 	// Constructor
-	basic_register_machine::token::token(const token_type& type, const std::string& text) noexcept : _type(type), _text(text) {}
+	basic_register_machine::token::token(const token_type& type, std::string_view text) noexcept : _type(type), _text(text) {}
 
 	// Returns the token type
 	const basic_register_machine::token_type& basic_register_machine::token::type() const noexcept {
 		return this->_type;
 	}
 	// Returns the token content
-	const std::string& basic_register_machine::token::text() const noexcept {
+	std::string_view basic_register_machine::token::text() const noexcept {
 		return this->_text;
 	}
 
 	// Implementation of the basic register machine lexer
 
 	// Constructor
-	basic_register_machine::basic_lexer::basic_lexer(const std::string& line) noexcept : _line(line), _carriage(0) {}
+	basic_register_machine::basic_lexer::basic_lexer(std::string_view line) noexcept : _line(line), _carriage(0) {}
 
 	// Returns a vector of tokens
 	std::vector<basic_register_machine::token> basic_register_machine::basic_lexer::tokenize() {
@@ -161,8 +170,8 @@ namespace IMD {
 				this->_line.compare(this->_carriage, keyword.size(), keyword) == 0) {
 
 				size_t next_symbol_position = this->_carriage + keyword.size();
-				if (next_symbol_position < this->_line.size() ||
-					!std::isspace(static_cast<unsigned char>(this->_line[next_symbol_position]))) {
+				if (next_symbol_position >= this->_line.size() ||
+					std::isspace(static_cast<unsigned char>(this->_line[next_symbol_position]))) {
 					this->_carriage += keyword.size();
 					return token{ type, keyword };
 				}
@@ -172,7 +181,7 @@ namespace IMD {
 		size_t start = { this->_carriage };
 		while (!this->eof() && !std::isspace(this->_line[this->_carriage]))
 			++this->_carriage;
-		std::string text = std::string(this->_line.substr(start, this->_carriage - start));
+		std::string_view text(this->_line.data() + start, this->_carriage - start);
 
 		if (text.empty()) return std::nullopt;
 
@@ -201,7 +210,7 @@ namespace IMD {
 
 	// Implementation of the extended register machine lexer
 
-	extended_register_machine::extended_lexer::extended_lexer(const std::string& line) noexcept : basic_lexer(line) {}
+	extended_register_machine::extended_lexer::extended_lexer(std::string_view line) noexcept : basic_lexer(line) {}
 
 	// Returns the next token
 	std::optional<basic_register_machine::token> extended_register_machine::extended_lexer::next_token() {
@@ -227,8 +236,8 @@ namespace IMD {
 				this->_line.compare(this->_carriage, keyword.size(), keyword) == 0) {
 
 				size_t next_symbol_position = this->_carriage + keyword.size();
-				if (next_symbol_position < this->_line.size() ||
-					!std::isspace(static_cast<unsigned char>(this->_line[next_symbol_position]))) {
+				if (next_symbol_position >= this->_line.size() ||
+					std::isspace(static_cast<unsigned char>(this->_line[next_symbol_position]))) {
 					this->_carriage += keyword.size();
 					return token{ type, keyword };
 				}
@@ -238,7 +247,7 @@ namespace IMD {
 		size_t start = { this->_carriage };
 		while (!this->eof() && !std::isspace(this->_line[this->_carriage]))
 			++this->_carriage;
-		std::string text = std::string(this->_line.substr(start, this->_carriage - start));
+		std::string_view text(this->_line.data() + start, this->_carriage - start);
 
 		if (text.empty()) return std::nullopt;
 
@@ -320,7 +329,7 @@ namespace IMD {
 		auto number_token = this->preview();
 
 		if (number_token.type() == token_type::literal) {
-			size_t mark = std::stoul(number_token.text());
+			size_t mark = std::stoul(std::string(number_token.text()));
 
 			++this->_carriage;
 
@@ -387,7 +396,7 @@ namespace IMD {
 			if (right_operand_token.type() != token_type::literal && right_operand_token.type() != token_type::variable)
 				throw std::runtime_error("Expected number or literal after '" + PLUS "'"s);
 
-			if (right_operand_token.type() == token_type::literal && std::stoi(right_operand_token.text()) < 0)
+			if (right_operand_token.type() == token_type::literal && std::stoi(std::string(right_operand_token.text())) < 0)
 				throw std::runtime_error("Only positive integers allowed for subtraction"s);
 
 			return std::make_unique<copy_assignment_instruction>(
@@ -407,7 +416,7 @@ namespace IMD {
 			if (right_operand_token.type() != token_type::literal && right_operand_token.type() != token_type::variable) // TODO: странно обрабатывает отрицательные числа
 				throw std::runtime_error("Expected number or literal after '" + MINUS "'"s);
 
-			if (right_operand_token.type() == token_type::literal && std::stoi(right_operand_token.text()) < 0)
+			if (right_operand_token.type() == token_type::literal && std::stoi(std::string(right_operand_token.text())) < 0)
 				throw std::runtime_error("Only positive integers allowed for subtraction"s);
 
 			return std::make_unique<copy_assignment_instruction>(
@@ -418,7 +427,7 @@ namespace IMD {
 		}
 
 		if (left_operand_token.type() == token_type::literal) {
-			if (std::stoi(left_operand_token.text()) < 0)
+			if (std::stoi(std::string(left_operand_token.text())) < 0)
 				throw std::runtime_error("Only positive integers allowed for copy assignment"s);
 
 			return std::make_unique<copy_assignment_instruction>(
@@ -540,8 +549,8 @@ namespace IMD {
 
 		return std::make_unique<condition_instruction>(
 			register_token.text(),
-			std::stoul(goto_true_token.text()),
-			std::stoul(goto_false_token.text()));
+			std::stoul(std::string(goto_true_token.text())),
+			std::stoul(std::string(goto_false_token.text())));
 	}
 
 	// Returns a unique pointer to the copy assignment instruction
@@ -609,7 +618,7 @@ namespace IMD {
 				throw std::runtime_error("Simple assignment only allows positive integer literals");
 
 			// Checking if a number is negative
-			if (std::stoi(left_operand_token.text()) < 0)
+			if (std::stoi(std::string(left_operand_token.text())) < 0)
 				throw std::runtime_error("Only positive integers allowed for assignment");
 
 			return std::make_unique<copy_assignment_instruction>(
@@ -638,7 +647,7 @@ namespace IMD {
 	}
 
 	// Constructor
-	basic_register_machine::copy_assignment_instruction::copy_assignment_instruction(const std::string& target_register, const operation& operation, const std::string& left_operand, const std::string& right_operand) noexcept :
+	basic_register_machine::copy_assignment_instruction::copy_assignment_instruction(std::string_view target_register, const operation& operation, std::string_view left_operand, std::string_view right_operand) noexcept :
 		instruction(), _target_register(target_register), _operation(operation), _left_operand(left_operand), _right_operand(right_operand) {
 		this->_description = this->_target_register + " " + COPY + " " + this->_left_operand + " " + (this->_operation == operation::plus ? PLUS : this->_operation == operation::minus ? MINUS : " ") + " " + this->_right_operand;
 	}
@@ -669,7 +678,7 @@ namespace IMD {
 	}
 
 	// Constructor
-	basic_register_machine::condition_instruction::condition_instruction(const std::string& compared_register, size_t goto_true, size_t goto_false) noexcept :
+	basic_register_machine::condition_instruction::condition_instruction(std::string_view compared_register, size_t goto_true, size_t goto_false) noexcept :
 		instruction(), _compared_register(compared_register), _goto_true(goto_true), _goto_false(goto_false) {
 		this->_description = IF + " " + this->_compared_register + " " + EQUAL + " 0 " + THEN + " " + GOTO + " " + std::to_string(this->_goto_true) + " " + ELSE + " " + GOTO + " " + std::to_string(this->_goto_false);
 	}
@@ -689,7 +698,7 @@ namespace IMD {
 	}
 
 	// Constructor
-	basic_register_machine::extended_condition_instruction::extended_condition_instruction(const std::string& compared_register, size_t compared_value, size_t goto_true, size_t goto_false) noexcept : _compared_value(compared_value), condition_instruction(compared_register, goto_true, goto_false) {
+	basic_register_machine::extended_condition_instruction::extended_condition_instruction(std::string_view compared_register, size_t compared_value, size_t goto_true, size_t goto_false) noexcept : _compared_value(compared_value), condition_instruction(compared_register, goto_true, goto_false) {
 		this->_description = IF + " " + this->_compared_register + " " + EQUAL + " " + std::to_string(this->_compared_value) + " " + THEN + " " + GOTO + " " + std::to_string(this->_goto_true) + " " + ELSE + " " + GOTO + " " + std::to_string(this->_goto_false);
 	}
 	// Executing a extended conditional instruction
@@ -708,7 +717,7 @@ namespace IMD {
 	}
 
 	// Constructor
-	extended_register_machine::composition_instruction::composition_instruction(const std::string& include_filename) noexcept : instruction(), _include_filename(include_filename) {
+	extended_register_machine::composition_instruction::composition_instruction(std::string_view include_filename) noexcept : instruction(), _include_filename(include_filename) {
 		this->_description = COMPOSITION + " " + this->_include_filename;
 	}
 
@@ -722,7 +731,7 @@ namespace IMD {
 	}
 
 	// Constructor
-	basic_register_machine::move_assignment_instruction::move_assignment_instruction(const std::string& to_register, const std::string& from_register) noexcept : instruction(), _to_register(to_register), _from_register(from_register) {
+	basic_register_machine::move_assignment_instruction::move_assignment_instruction(std::string_view to_register, std::string_view from_register) noexcept : instruction(), _to_register(to_register), _from_register(from_register) {
 		this->_description = this->_to_register + " " + MOVE + " " + this->_from_register;
 	}
 	// Executing move assignment instruction
