@@ -25,19 +25,23 @@ namespace IMD {
 		line.erase(line.find_last_not_of(" \t\r\n") + 1);
 	}
 
-	// Returns a new string_view with leading and trailing whitespace removed from the input string_view
-	std::string_view trim(std::string_view line) noexcept {
-		size_t start = line.find_first_not_of(" \t\r\n");
-		if (start == std::string_view::npos) return {};
-		size_t end = line.find_last_not_of(" \t\r\n");
-
-		return line.substr(start, end - start + 1);
+	// Checks if the given string represents a keyword
+	bool is_keyword(std::string_view line){
+		if (line == SEPARATOR || line == COPY || line == MOVE || line == PLUS || line == MINUS ||
+			line == STOP || line == IF || line == THEN || line == ELSE || line == GOTO ||
+			line == EQUAL || line == COMPOSITION || line == COMMENT)
+			return true; 
+		return false;
 	}
 
 	// Checks if the given string represents a valid register identifier
 	bool is_register(std::string_view line) noexcept {
 		if (line.empty())
 			return false;
+
+		if (is_keyword(line))
+			return false;
+			
 
 		if (!std::isalpha(*line.begin()))
 			return false; // The first character of the register must be a letter
@@ -727,7 +731,7 @@ namespace IMD {
 		if (erm == NULL)
 			throw std::runtime_error("erasd");
 
-		erm->_file_stack.push({ this->_include_filename, std::nullopt });
+		erm->_file_stack.push({ this->_include_filename, {std::nullopt, std::nullopt} });
 	}
 
 	// Constructor
@@ -814,9 +818,9 @@ namespace IMD {
 	}
 
 	// Load all instuctions
-	void basic_register_machine::load_all_instructions(std::streampos start_position, std::ios_base::seekdir border) {
+	void basic_register_machine::load_all_instructions(std::pair<std::streampos, std::streampos> barier, std::ios_base::seekdir border) {
 		std::ifstream ifs(this->_filename);
-		ifs.seekg(start_position, border);
+		ifs.seekg(barier.first, border);
 		std::string line;
 
 		if (!ifs)
@@ -898,6 +902,9 @@ namespace IMD {
 
 	// Parsing input registers
 	void basic_register_machine::parse_input_registers(const std::string& line) {
+		if (line.empty())
+			throw std::runtime_error("Filename: " + this->_filename + ". No input registers");
+
 		std::string variable;
 		std::istringstream iss(line);
 
@@ -912,6 +919,9 @@ namespace IMD {
 
 	// Parsing output registers
 	void basic_register_machine::parse_output_registers(const std::string& line) {
+		if (line.empty())
+			throw std::runtime_error("Filename: " + this->_filename + ". No output registers");
+
 		std::string variable;
 		std::istringstream iss(line);
 		while (iss >> variable) {
@@ -933,10 +943,10 @@ namespace IMD {
 		this->_include_files(_filename); // Processing all instructions of the composition from the source file
 
 		while (!this->_file_stack.empty()) { // Traverse all included files
-			auto [file, read_position] = this->_file_stack.top(); // Retrieve the top-level file and the current reading position
+			auto [file, barier] = this->_file_stack.top(); // Retrieve the top-level file and the current reading position
 			this->_file_stack.pop();
 
-			if (read_position == std::nullopt) // Processing all instructions of the composition from the top-level file
+			if (barier.first == std::nullopt && barier.second == std::nullopt) // Processing all instructions of the composition from the top-level file
 				this->_include_files(file);
 			else {
 				std::vector<int> results{}; // Vector of intermediate results
@@ -949,7 +959,7 @@ namespace IMD {
 				this->reset();
 				this->_filename = file;
 				this->_is_verbose = is_verbose;
-				this->load_all_instructions(read_position.value());
+				this->load_all_instructions({barier.first.value(), barier.second.value()});
 
 				if (!results.empty()) { // If there are intermediate results, pass them into the input registers
 
@@ -979,13 +989,13 @@ namespace IMD {
 	}
 
 	// Load all instructions
-	void extended_register_machine::load_all_instructions(std::streampos start_position, std::ios_base::seekdir border) {
+	void extended_register_machine::load_all_instructions(std::pair<std::streampos, std::streampos> barier, std::ios_base::seekdir border) {
 		std::ifstream ifs(this->_filename);
 
 		if (!ifs)
 			throw std::runtime_error("Filename: " + this->_filename + ". Error processing file");
 
-		ifs.seekg(start_position, border);
+		ifs.seekg(barier.first, border);
 		std::string line;
 
 		while (std::getline(ifs, line)) { // Skipping blank lines between composition instructions and input registers
@@ -1025,6 +1035,9 @@ namespace IMD {
 				auto tokens = lexer.tokenize();
 				extended_parser parser(tokens);
 				auto instr_ptr = parser.make_instruction();
+				if (dynamic_cast<basic_register_machine::composition_instruction*>(instr_ptr.get()) != NULL)
+					throw std::runtime_error("CALL CALL CALL CALL");
+
 				this->_instructions.push_back(std::move(instr_ptr));
 			}
 			catch (const std::exception& e) {
@@ -1036,6 +1049,13 @@ namespace IMD {
 
 		// Processing output registers
 		this->parse_output_registers(line);
+
+		// There should be no extra entries after the output registers
+		while (ifs.tellg() < barier.second && std::getline(ifs, line)) {
+			remove_comment(line);
+			if (!line.empty())
+				throw std::invalid_argument("Filename: " + this->_filename + ". There should be no extra entries after the output registers");
+		}
 	}
 
 	// Follow all instuctions
@@ -1062,7 +1082,7 @@ namespace IMD {
 		if (!input_file)
 			return;
 
-		constexpr size_t READ_BUFFER_SIZE = 4096; // 4 KB - standard read block
+		constexpr size_t BUFFER_SIZE{4096}; // 4 KB - standard read block
 
 		std::vector<std::unique_ptr<basic_register_machine::instruction>> composition_instructions{};
 
@@ -1075,12 +1095,12 @@ namespace IMD {
 		// Buffer for accumulating characters of the line that we read from the end of the file
 		std::string reversed_line_buffer;
 		std::streamoff read_position{ file_size }; // Current reading position pointer
-
+		std::streampos end;
 		// Reading a file from the end
 		// We go through the file in blocks by READ_BUFFER_SIZE, moving backwards
 		while (read_position > 0 && !composition_block_ended) {
 			// We determine the size of the current block (if there is a piece smaller than READ_BUFFER_SIZE left, we read it entirely)
-			size_t current_chunk_size = (read_position >= READ_BUFFER_SIZE) ? READ_BUFFER_SIZE : static_cast<size_t>(read_position);
+			size_t current_chunk_size = (read_position >= BUFFER_SIZE) ? BUFFER_SIZE : static_cast<size_t>(read_position);
 			read_position -= current_chunk_size;
 			input_file.seekg(read_position);
 
@@ -1093,23 +1113,27 @@ namespace IMD {
 				char ch = read_buffer[i];
 				if (ch == '\n') {
 					// End of line encountered - reverse the accumulated buffer, since the characters were added in reverse order
+					std::streampos line_start_pos = read_position + i + 1;
 					std::reverse(reversed_line_buffer.begin(), reversed_line_buffer.end());
 					remove_comment(reversed_line_buffer);
-					if (!reversed_line_buffer.empty()) {
-						try {
-							extended_lexer lexer(reversed_line_buffer);
-							auto tokens = lexer.tokenize();
-							extended_parser parser(tokens);
-							auto instr_ptr = parser.make_instruction();
-							if (instr_ptr == NULL)
-								break;
-
-							composition_instructions.push_back(std::move(instr_ptr));
-						}
-						catch (...) {
-							composition_block_ended = true;
+					if (reversed_line_buffer.empty()) continue;
+					try {
+						extended_lexer lexer(reversed_line_buffer);
+						auto tokens = lexer.tokenize();
+						extended_parser parser(tokens);
+						auto instr_ptr = parser.make_instruction();
+						if (instr_ptr == NULL)
 							break;
-						}
+
+						composition_instructions.push_back(std::move(instr_ptr));
+
+						if (!composition_block_ended && end == 0) {
+							end = line_start_pos;
+						}				
+					}
+					catch (...) {
+						composition_block_ended = true;
+						break;
 					}
 					reversed_line_buffer.clear();
 				}
@@ -1147,7 +1171,7 @@ namespace IMD {
 			input_file.seekg(0, std::ios::beg);
 
 			std::string line;
-			std::streampos position_after_block = input_file.tellg();
+			std::streampos start = input_file.tellg();
 
 			while (std::getline(input_file, line)) {
 				remove_comment(line);
@@ -1163,13 +1187,13 @@ namespace IMD {
 						break;
 
 					composition_instructions.push_back(std::move(instr_ptr));
-					position_after_block = input_file.tellg();
+					start = input_file.tellg();
 				}
 				catch (...) {
 					break;
 				}
 			}
-			this->_file_stack.push({ filename, position_after_block });
+			this->_file_stack.push({ filename, {start, end} });
 		}
 
 		for (auto it = composition_instructions.rbegin(); it != composition_instructions.rend(); ++it)

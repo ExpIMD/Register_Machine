@@ -40,9 +40,8 @@ namespace IMD {
 	// Removes leading and trailing whitespace characters from the given string in-place
 	void trim(std::string& line) noexcept;
 
-	// Returns a new string_view with leading and trailing whitespace removed from the input string_view
-	std::string_view trim(std::string_view line) noexcept;
-
+	// Checks if the given string represents a keyword
+	bool is_keyword(std::string_view line);
 	// Checks if the given string represents a valid register identifier
 	bool is_register(std::string_view line) noexcept;
 
@@ -384,7 +383,7 @@ namespace IMD {
 
 	protected:
 		// Load all instructions
-		virtual void load_all_instructions(std::streampos start_position = 0, std::ios_base::seekdir border = std::ios::beg);
+		virtual void load_all_instructions(std::pair<std::streampos, std::streampos> barier = {0, 0}, std::ios_base::seekdir border = std::ios::beg);
 		// Follow all instructions
 		virtual void execute_all_instructions();
 
@@ -441,7 +440,7 @@ namespace IMD {
 
 	protected:
 		// Stack for controlling the order of processing RM files: pair <file name, position to continue reading from>
-		std::stack<std::pair<std::string, std::optional<std::streampos>>> _file_stack;
+		std::stack<std::pair<std::string, std::pair<std::optional<std::streampos>, std::optional<std::streampos>>>> _file_stack;
 
 	public:
 		// Constructor
@@ -460,7 +459,7 @@ namespace IMD {
 
 	protected:
 		// Load all instruction
-		void load_all_instructions(std::streampos start_position = 0, std::ios_base::seekdir border = std::ios::beg) override;
+		void load_all_instructions(std::pair<std::streampos, std::streampos> barier = {0, 0}, std::ios_base::seekdir border = std::ios::beg) override;
 
 		// Follow all instructions
 		void execute_all_instructions() override;
