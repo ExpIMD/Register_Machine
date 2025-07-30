@@ -398,6 +398,8 @@ namespace IMD {
 	protected:
 		friend class composition_instruction;
 
+		const size_t BUFFER_SIZE{4096}; // 4 KB - standard read block
+
 	protected:
 
 		// Extended register machine lexer class

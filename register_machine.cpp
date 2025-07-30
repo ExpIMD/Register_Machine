@@ -1082,8 +1082,6 @@ namespace IMD {
 		if (!input_file)
 			return;
 
-		constexpr size_t BUFFER_SIZE{4096}; // 4 KB - standard read block
-
 		std::vector<std::unique_ptr<basic_register_machine::instruction>> composition_instructions{};
 
 		bool composition_block_ended = false;
