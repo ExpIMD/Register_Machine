@@ -343,7 +343,7 @@ namespace IMD {
 
 	public:
 		// Constructor
-		basic_register_machine(const std::string& filename, bool is_verbose = false) noexcept;
+		basic_register_machine(std::string_view name, bool is_verbose = false) noexcept;
 
 		// Copy constructor
 		basic_register_machine(const basic_register_machine&) = delete;
@@ -398,8 +398,6 @@ namespace IMD {
 	protected:
 		friend class composition_instruction;
 
-		const size_t BUFFER_SIZE{4096}; // 4 KB - standard read block
-
 	protected:
 
 		// Extended register machine lexer class
@@ -443,6 +441,8 @@ namespace IMD {
 	protected:
 		// Stack for controlling the order of processing RM files: pair <file name, position to continue reading from>
 		std::stack<std::pair<std::string, std::pair<std::optional<std::streampos>, std::optional<std::streampos>>>> _file_stack;
+		// 4 KB - standard read block
+		const size_t BUFFER_SIZE{4096};
 
 	public:
 		// Constructor
@@ -458,6 +458,8 @@ namespace IMD {
 
 		// Launch of RM
 		void run() override;
+		// Reset PM
+		void reset() override;
 
 	protected:
 		// Load all instruction

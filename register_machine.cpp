@@ -749,10 +749,14 @@ namespace IMD {
 	// Implementation of the basic register machine
 
 	// Constructor
-	basic_register_machine::basic_register_machine(const std::string& filename, bool is_verbose) noexcept : _filename(filename), _is_verbose(is_verbose), _carriage(0), _registers(), _instructions(), _output_registers(), _is_stopped(false) {}
+	basic_register_machine::basic_register_machine(std::string_view filename, bool is_verbose) noexcept : _filename(filename), _is_verbose(is_verbose), _carriage(0), _registers(), _instructions(), _output_registers(), _is_stopped(false) {}
 
 	// Launch of RM
 	void basic_register_machine::run() {
+		auto temp = this->_filename;
+		this->reset();
+		this->_filename = temp;
+		
 		this->load_all_instructions();
 
 		for (const auto& x : this->_input_registers) { // Запрос ввода значения для входных регистров
@@ -761,16 +765,16 @@ namespace IMD {
 		}
 
 		this->execute_all_instructions();
-		this->print_output_registers(" "); // Вывод выходных регистров
+		this->println_output_registers(" "s); // Вывод выходных регистров
 	}
 
 	// Reset RM
 	void basic_register_machine::reset() {
 		this->_carriage = 0;
 		this->_registers.clear();
-		this->_instructions.resize(0);
-		this->_output_registers.resize(0);
-		this->_input_registers.resize(0);
+		this->_instructions.clear();
+		this->_output_registers.clear();
+		this->_input_registers.clear();
 		this->_filename = ""s;
 		this->_is_stopped = false;
 		this->_is_verbose = false;
@@ -940,6 +944,10 @@ namespace IMD {
 
 	// Launch of RM
 	void extended_register_machine::run() {
+		auto temp = this->_filename;
+		this->reset();
+		this->_filename = temp;
+		
 		this->_include_files(_filename); // Processing all instructions of the composition from the source file
 
 		while (!this->_file_stack.empty()) { // Traverse all included files
@@ -985,7 +993,14 @@ namespace IMD {
 				this->execute_all_instructions(); // Executing the instructions of the top-level file
 			}
 		}
-		this->print_output_registers(" "); // After executing all files, display the values of the output registers
+		this->println_output_registers(" "); // After executing all files, display the values of the output registers
+	}
+	// Reset RM
+	void extended_register_machine::reset() {
+		basic_register_machine::reset();
+		while (!this->_file_stack.empty())
+			this->_file_stack.pop();
+		
 	}
 
 	// Load all instructions
@@ -1084,7 +1099,7 @@ namespace IMD {
 
 		std::vector<std::unique_ptr<basic_register_machine::instruction>> composition_instructions{};
 
-		bool composition_block_ended = false;
+		bool composition_block_ended {false};
 
 		// Determining the file size
 		input_file.seekg(0, std::ios::end);
@@ -1107,7 +1122,7 @@ namespace IMD {
 			input_file.read(read_buffer.data(), current_chunk_size);
 
 			// We go through the block from the end to the beginning (since we read the file from the end)
-			for (int i = static_cast<int>(current_chunk_size) - 1; i >= 0; --i) {
+			for (int i = static_cast<long>(current_chunk_size) - 1; i >= 0; --i) {
 				char ch = read_buffer[i];
 				if (ch == '\n') {
 					// End of line encountered - reverse the accumulated buffer, since the characters were added in reverse order
@@ -1125,9 +1140,8 @@ namespace IMD {
 
 						composition_instructions.push_back(std::move(instr_ptr));
 
-						if (!composition_block_ended && end == 0) {
+						if (!composition_block_ended && end == 0)
 							end = line_start_pos;
-						}				
 					}
 					catch (...) {
 						composition_block_ended = true;
