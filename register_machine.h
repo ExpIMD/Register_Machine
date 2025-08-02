@@ -355,8 +355,8 @@ namespace IMD {
 
 		// Launch of RM
 		virtual void run();
-		// Reset PM
-		virtual void reset();
+		// Reboot RM
+		virtual void reboot();
 
 		// Print input registers separated by a separator without a new line
 		void print_input_registers(const std::string& separator = " ") const noexcept;
@@ -382,6 +382,9 @@ namespace IMD {
 		friend int get_value(const basic_register_machine& brm, const std::string& line);
 
 	protected:
+		// Drop settings of RM
+		virtual void drop();
+
 		// Load all instructions
 		virtual void load_all_instructions(std::pair<std::streampos, std::streampos> barier = {0, 0}, std::ios_base::seekdir border = std::ios::beg);
 		// Follow all instructions
@@ -391,6 +394,7 @@ namespace IMD {
 		void parse_input_registers(const std::string& line);
 		// Parsing output registers
 		void parse_output_registers(const std::string& line);
+		
 	};
 
 	// Extended register machine class
@@ -458,8 +462,8 @@ namespace IMD {
 
 		// Launch of RM
 		void run() override;
-		// Reset PM
-		void reset() override;
+		// Reboot RM
+		void reboot() override;
 
 	protected:
 		// Load all instruction

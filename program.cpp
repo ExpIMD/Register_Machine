@@ -8,7 +8,6 @@ int main() {
 	std::string filename{ "examples/RM2.txt" };
 	IMD::extended_register_machine erm(filename);
 	erm.run();
-	erm.run();
 
 	return 0;
 }

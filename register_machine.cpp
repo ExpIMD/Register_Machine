@@ -753,9 +753,11 @@ namespace IMD {
 
 	// Launch of RM
 	void basic_register_machine::run() {
-		auto temp = this->_filename;
-		this->reset();
-		this->_filename = temp;
+		if (this->_is_stopped){
+			std::cout << "You need to reboot the register machine"s << std::endl;
+			return;
+		}
+
 		
 		this->load_all_instructions();
 
@@ -768,8 +770,18 @@ namespace IMD {
 		this->println_output_registers(" "s); // Вывод выходных регистров
 	}
 
-	// Reset RM
-	void basic_register_machine::reset() {
+	// Reboot RM
+	void basic_register_machine::reboot() {
+		this->_carriage = 0;
+		this->_registers.clear();
+		this->_instructions.clear();
+		this->_output_registers.clear();
+		this->_input_registers.clear();
+		this->_is_stopped = false;
+	}
+
+	// Drop settings of RM
+	void basic_register_machine::drop() {
 		this->_carriage = 0;
 		this->_registers.clear();
 		this->_instructions.clear();
@@ -944,9 +956,11 @@ namespace IMD {
 
 	// Launch of RM
 	void extended_register_machine::run() {
-		auto temp = this->_filename;
-		this->reset();
-		this->_filename = temp;
+		if (this->_is_stopped){
+			throw std::runtime_error("You need to reboot the register machine");
+			return;
+		}
+		
 		
 		this->_include_files(_filename); // Processing all instructions of the composition from the source file
 
@@ -964,7 +978,7 @@ namespace IMD {
 				auto is_verbose = this->_is_verbose;
 
 				// Updating the register machine state before a new run
-				this->reset();
+				this->drop();
 				this->_filename = file;
 				this->_is_verbose = is_verbose;
 				this->load_all_instructions({barier.first.value(), barier.second.value()});
@@ -995,9 +1009,9 @@ namespace IMD {
 		}
 		this->println_output_registers(" "); // After executing all files, display the values of the output registers
 	}
-	// Reset RM
-	void extended_register_machine::reset() {
-		basic_register_machine::reset();
+	// Reboot RM
+	void extended_register_machine::reboot() {
+		basic_register_machine::reboot();
 		while (!this->_file_stack.empty())
 			this->_file_stack.pop();
 		
